@@ -341,6 +341,8 @@ const NotificationSystem = {
             cancelText = '取消'
         } = options;
 
+        //原作者: disocrd类脑 Niccole @niccole0414
+
         return new Promise((resolve) => {
             const $overlay = $root('#dnd-modal-overlay');
             const $modal = $root('#dnd-modal-content');

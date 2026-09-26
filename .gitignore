@@ -15,6 +15,8 @@ Thumbs.db
 !.vscode/settings.json
 *.swp
 *.swo
+.claude/
+.vscode/
 
 # 临时文件
 *.tmp

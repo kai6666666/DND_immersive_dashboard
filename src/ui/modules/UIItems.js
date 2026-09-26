@@ -22,6 +22,17 @@ export default {
         const properties = item['特性'] || item['properties'] || '';
         const rarity = item['稀有度'] || item['rarity'] || '普通';
         const owner = item['所属人'] || '';
+
+        //change
+        const rarityStyles = {
+            '普通': { bg: 'rgba(255,255,255,0.1)', color: '#aaa' },
+            '优秀': { bg: 'var(--dnd-accent-green)', color: '#fff' },
+            '稀有': { bg: 'var(--dnd-accent-blue)', color: '#fff' },
+            '史诗': { bg: '#9333ea', color: '#fff' },
+            '传说': { bg: 'var(--dnd-border-gold)', color: '#000' },
+            '神器': { bg: 'var(--dnd-accent-red)', color: '#fff' }
+        };
+        const style = rarityStyles[rarity] || { bg: '#444', color: '#ccc' };
         
         // 生成 HTML
         return `
@@ -43,7 +54,7 @@ export default {
                 ${properties ? `<div class="dnd-item-props">${properties}</div>` : ''}
                 
                 <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:4px;">
-                    <div class="dnd-item-rarity rarity-${rarity.toLowerCase()}">${rarity}</div>
+                    <div class="dnd-item-rarity" style="background:${style.bg}; color:${style.color}; padding:1px 6px; border-radius:3px; font-size:10px; font-weight:bold; text-transform:uppercase;">${rarity}</div>
                     <div style="display:flex;flex-direction:column;align-items:flex-end;">
                         ${owner ? `<div style="font-size:10px;color:var(--dnd-text-highlight);background:var(--dnd-bg-tertiary);padding:1px 4px;border-radius:2px;margin-bottom:2px;"><i class="fa-solid fa-user"></i> ${owner}</div>` : ''}
                         ${item['重量'] ? `<div style="font-size:11px;color:var(--dnd-text-dim);">${item['重量']} lb</div>` : ''}
@@ -323,27 +334,74 @@ export default {
             return;
         }
 
+        const items = DataManager.getTable('ITEM_Inventory') || [];
+        const item = items.find(i => (i['物品ID'] === itemId) || (i['物品名称'] === itemId));
+        const itemName = item ? item['物品名称'] : itemId; // 优先使用名称，找不到则回退 ID
+
         if (action === 'equip') {
             // 获取最新状态
             const items = DataManager.getTable('ITEM_Inventory');
             const item = items.find(i => (i['物品ID'] === itemId) || (i['物品名称'] === itemId));
             if (item) {
                 const isEquipped = item['已装备'] === '是' || item['已装备'] === true || String(item['已装备']).toLowerCase() === 'true';
-                // 装备/卸下操作暂不记录 Log，或可根据需求添加
-                ItemManager.update(itemId, { '已装备': isEquipped ? '否' : '是' });
+                const actionVerb = isEquipped ? '卸下了' : '装备了';
+                
+                const global = DataManager.getTable('SYS_GlobalState');
+                const isCombat = global && global[0] && global[0]['战斗模式'] === '战斗中';
+                const activeChar = this.getControlledCharacter();
+                const charName = activeChar ? activeChar['姓名'] : '我';
+                const charId = activeChar ? (activeChar['CHAR_ID'] || activeChar['PC_ID'] || activeChar['姓名']) : 'default';
+
+                if (isCombat) {
+                    this._actionQueue.push({
+                        type: 'item',
+                        data: { target: null },
+                        desc: `${actionVerb} 【${itemName}】`,
+                        charName: charName,
+                        charId: charId
+                    });
+                    this.renderHUD();
+                    NotificationSystem.success(`已将${actionVerb}动作加入队列`);
+                } else {
+                    this.fillChatInput(`${charName}${actionVerb}了1个${itemName}（${itemId}）`);
+                }
             }
         }
         else if (action === 'use' || action === 'drop') {
             const actionName = action === 'use' ? '使用' : '丢弃';
-            const confirmed = await NotificationSystem.confirm(`确定要${actionName} 1 个 ${itemId} 吗？`, {
+            const confirmed = await NotificationSystem.confirm(`确定要在剧情中${actionName} 1 个 ${itemId} 吗？`, {
                 title: `${actionName}物品`,
                 confirmText: actionName,
                 type: action === 'drop' ? 'danger' : 'info'
             });
+            
             if (confirmed) {
-                // [更新] 生成通知文本并传递给 Update
-                const note = `[系统] 玩家${actionName}了 1x ${itemId}`;
-                ItemManager.update(itemId, { '数量': parseInt(currentQty) - 1 }, note);
+                // [核心修复]：彻底移除 ItemManager.update 删库操作！
+                // 完美对齐 UICombat.js 的队列逻辑，使用 this 直接操作
+                
+                const global = DataManager.getTable('SYS_GlobalState');
+                const isCombat = global && global[0] && global[0]['战斗模式'] === '战斗中';
+                
+                const activeChar = this.getControlledCharacter();
+                const charName = activeChar ? activeChar['姓名'] : '我';
+                const charId = activeChar ? (activeChar['CHAR_ID'] || activeChar['PC_ID'] || activeChar['姓名']) : 'default';
+
+                if (isCombat) {
+                    // 战斗中：加入行动队列
+                    this._actionQueue.push({
+                        type: 'item',
+                        data: { target: null },
+                        desc: `${actionName}了1个${itemName}（${itemId}）`, // 这里的格式将完美契合 commitActions 的拼接
+                        charName: charName,
+                        charId: charId
+                    });
+                    
+                    this.renderHUD(); // 刷新右下角的待执行队列显示
+                    NotificationSystem.success(`已将${itemName}物品加入行动队列`);
+                } else {
+                    // 非战斗中：直接发送提示词
+                    this.fillChatInput(`${charName}${actionName}了1个${itemName}（${itemId}）`);
+                }
             }
         }
     },
@@ -525,6 +583,8 @@ export default {
             };
             const factionType = f['势力类型'] || '其他';
             const typeIcon = typeIcons[factionType] || typeIcons['其他'];
+
+            //原作者: disocrd类脑 Niccole @niccole0414
             
             html += `
                 <div class="dnd-faction-item" style="padding:10px;background:var(--dnd-bg-card);border:1px solid var(--dnd-border-inner);border-radius:6px;">

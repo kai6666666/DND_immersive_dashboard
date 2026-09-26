@@ -513,10 +513,17 @@ export default {
         
         // 布局
         let html = `<div class="dnd-hud-combat-layout">`;
+
+        const activeChar = this.getControlledCharacter();
+        const activeId = activeChar ? (activeChar['CHAR_ID'] || activeChar['PC_ID'] || activeChar['姓名']) : null;
+        if (activeId && !this._turnResources[activeId]) {
+            this.resetActionEconomy(activeId);
+        }
         
         // 左侧：迷你地图（根据设置决定是否显示）
-        const turnRes = this._turnResources || { action: 1, bonus: 1, reaction: 1, movement: 30 };
-        
+        //const turnRes = this._turnResources || { action: 1, bonus: 1, reaction: 1, movement: 30 };
+        const turnRes = (activeId && this._turnResources[activeId]) ? this._turnResources[activeId] : { action: 1, bonus: 1, reaction: 1, movement: 30 };
+
         html += `
             <div style="display:flex;flex-direction:column;gap:5px;">
                 ${showMiniMap ? '<div class="dnd-hud-minimap" id="dnd-hud-minimap-content" style="width:180px;height:180px;"></div>' : ''}
@@ -540,12 +547,14 @@ export default {
                         cursor: pointer;
                         font-weight: bold;
                         font-size: 12px;
+
                     " onclick="window.DND_Dashboard_UI.startTargeting({
                         type: 'move',
-                        rangeText: '30尺',
+                        rangeText: (this._turnResources && (DataManager.getControlledCharacter() ? (DataManager.getControlledCharacter()['CHAR_ID'] || DataManager.getControlledCharacter()['PC_ID'] || DataManager.getControlledCharacter()['姓名']) : null)) ? (this._turnResources[DataManager.getControlledCharacter()['CHAR_ID'] || DataManager.getControlledCharacter()['PC_ID'] || DataManager.getControlledCharacter()['姓名']]?.movement + '尺') : '30尺',
                         skillName: '移动',
                         callback: (res) => window.DND_Dashboard_UI.executeAction('move', res)
                     })"><i class="fa-solid fa-person-walking"></i> 移动</button>
+
                     <button class="dnd-clickable" style="
                         flex: 1;
                         background: linear-gradient(135deg, var(--dnd-bg-secondary), var(--dnd-text-highlight));
@@ -1047,6 +1056,8 @@ export default {
         
         $container.append($footerEl);
     },
+
+    //原作者: disocrd类脑 Niccole @niccole0414
 
     // [新增] 手动触发神数据库更新
     async triggerManualUpdate(event) {

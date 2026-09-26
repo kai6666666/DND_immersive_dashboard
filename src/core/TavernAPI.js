@@ -329,35 +329,121 @@ export const TavernAPI = {
         }
     },
 
+
+    /**
+     * 获取酒馆中所有可用的世界书名称列表 (四重真实保障提取)
+     * @returns {Promise<Array<string>>}
+     */
+    getAllWorldbookNames: async function() {
+        const { TavernHelper, SillyTavern } = this.getCore();
+        const names = new Set();
+
+        // 1. 最强绝对保障：直接请求酒馆后端官方接口，获取底层字典键名
+        try {
+            const headers = SillyTavern?.getRequestHeaders ? SillyTavern.getRequestHeaders() : {};
+            const res = await fetch('/api/worldinfo', {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json', ...headers }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                // 返回的 data 是以世界书名字为 Key 的对象字典
+                if (data && typeof data === 'object' && !Array.isArray(data)) {
+                    Object.keys(data).forEach(k => names.add(String(k).trim()));
+                }
+            }
+        } catch (e) {
+            console.warn('[TavernAPI] 通过 GET /api/worldinfo 获取失败:', e);
+        }
+
+        // 2. 保障二：读取酒馆原生前端全局变量 (兼容旧版非模块化酒馆)
+        try {
+            const win = window.parent || window;
+            if (win.world_names && Array.isArray(win.world_names)) {
+                win.world_names.forEach(n => names.add(String(n).trim()));
+            }
+            if (win.world_info_data) {
+                Object.keys(win.world_info_data).forEach(n => names.add(String(n).trim()));
+            }
+        } catch (e) {}
+
+        // 3. 保障三：DOM 暴力抓取 (直接去酒馆页面找所有相关的下拉框)
+        try {
+            const { $ } = getCore();
+            if ($) {
+                const doc = window.parent?.document || window.document;
+                $(doc).find('#world_editor_select option, #character_world_info option, .world_info_select option').each(function() {
+                    const val = $(this).attr('value') || $(this).text();
+                    if (val && !['', 'none', 'null', '0'].includes(String(val).toLowerCase()) && !val.startsWith('--')) {
+                        names.add(String(val).trim());
+                    }
+                });
+            }
+        } catch (e) {}
+
+        // 4. 保障四：从酒馆助手获取当前已绑定的世界书 (兜底)
+        try {
+            if (TavernHelper) {
+                if (typeof TavernHelper.getGlobalWorldbookNames === 'function') {
+                    (TavernHelper.getGlobalWorldbookNames() || []).forEach(n => names.add(String(n).trim()));
+                }
+                if (typeof TavernHelper.getChatWorldbookName === 'function') {
+                    const cb = TavernHelper.getChatWorldbookName('current');
+                    if (cb) names.add(String(cb).trim());
+                }
+                if (typeof TavernHelper.getCharWorldbookNames === 'function') {
+                    const cbs = TavernHelper.getCharWorldbookNames('current') || {};
+                    if (cbs.primary) names.add(String(cbs.primary).trim());
+                    if (Array.isArray(cbs.additional)) cbs.additional.forEach(n => names.add(String(n).trim()));
+                }
+            }
+        } catch (e) {}
+
+        // 过滤掉系统自带的占位符选项和空值
+        const result = Array.from(names).filter(n => 
+            n && 
+            n !== 'No World Info' && 
+            n !== 'Select World Info' && 
+            n !== 'No specific world'
+        );
+        
+        console.log('[TavernAPI] 已成功获取酒馆世界书列表:', result);
+        return result;
+    },
+
     /**
      * 获取当前启用的世界书内容
      * @returns {Promise<string>} 世界书内容摘要
      */
-    getEnabledWorldInfo: async function() {
+    getEnabledWorldInfo: async function(customWorldbooks = null) {
         const { TavernHelper } = this.getCore();
         if (!TavernHelper) return '';
 
         try {
             const worldbooks = new Set();
             
-            // 1. 全局世界书
-            if (TavernHelper.getGlobalWorldbookNames) {
-                const globals = TavernHelper.getGlobalWorldbookNames();
-                if (Array.isArray(globals)) globals.forEach(n => worldbooks.add(n));
-            }
+            // 1. 如果传入了自定义世界书名称，则优先读取指定的世界书
+            if (customWorldbooks) {
+                const list = Array.isArray(customWorldbooks) ? customWorldbooks : [customWorldbooks];
+                list.filter(Boolean).forEach(n => worldbooks.add(String(n).trim()));
+            } else {
+                // 2. 未指定时：自动读取酒馆当前全局、聊天与角色绑定的世界书
+                if (TavernHelper.getGlobalWorldbookNames) {
+                    const globals = TavernHelper.getGlobalWorldbookNames();
+                    if (Array.isArray(globals)) globals.forEach(n => worldbooks.add(n));
+                }
 
-            // 2. 聊天世界书
-            if (TavernHelper.getChatWorldbookName) {
-                const chatBook = TavernHelper.getChatWorldbookName('current');
-                if (chatBook) worldbooks.add(chatBook);
-            }
+                if (TavernHelper.getChatWorldbookName) {
+                    const chatBook = TavernHelper.getChatWorldbookName('current');
+                    if (chatBook) worldbooks.add(chatBook);
+                }
 
-            // 3. 角色世界书
-            if (TavernHelper.getCharWorldbookNames) {
-                const charBooks = TavernHelper.getCharWorldbookNames('current');
-                if (charBooks) {
-                    if (charBooks.primary) worldbooks.add(charBooks.primary);
-                    if (Array.isArray(charBooks.additional)) charBooks.additional.forEach(n => worldbooks.add(n));
+                if (TavernHelper.getCharWorldbookNames) {
+                    const charBooks = TavernHelper.getCharWorldbookNames('current');
+                    if (charBooks) {
+                        if (charBooks.primary) worldbooks.add(charBooks.primary);
+                        if (Array.isArray(charBooks.additional)) charBooks.additional.forEach(n => worldbooks.add(n));
+                    }
                 }
             }
 
@@ -371,20 +457,33 @@ export const TavernAPI = {
                     const entries = await TavernHelper.getWorldbook(bookName);
                     if (entries && entries.length > 0) {
                         context += `\n--- 世界书: ${bookName} ---\n`;
-                        // 筛选启用的条目
-                        const activeEntries = entries.filter(e => e.enabled);
+
+                        // [新增] 排除关键词列表（可在此自由增减需要忽略的词）
+                        const excludeWords = ['命定系统', '纪要-', 'TavernDB-', '角色信息-', '角色属性'];
+
+                        // 筛选启用条目，并直接剔除包含排除词的条目
+                        const activeEntries = entries.filter(e => {
+                            if (!e.enabled) return false;
+                            const text = ((Array.isArray(e.keys) ? e.keys : []).join(',') + (e.content || '')).toLowerCase();
+                            return !excludeWords.some(w => text.includes(w.toLowerCase()));
+                        });
                         
                         // 简单摘要: 仅提取关键字和部分内容，避免 Token 过多
                         // 优先提取: 职业, 种族, 等级, 魔法, 规则
+
+
                         const relevantEntries = activeEntries.filter(e => {
                             const keys = (Array.isArray(e.keys) ? e.keys : []).join(',').toLowerCase();
                             const content = (e.content || '').toLowerCase();
-                            return keys.includes('class') || keys.includes('race') || keys.includes('level') || keys.includes('magic') || keys.includes('rule') ||
-                                   content.includes('职业') || content.includes('种族') || content.includes('等级') || content.includes('规则');
+                            return keys.includes('数值') || keys.includes('世界') || keys.includes('规则') || keys.includes('设定') || keys.includes('技能') || keys.includes('魔法') || keys.includes('法术') || keys.includes('战技') || keys.includes('种族') || keys.includes('等级') ||
+                                   content.includes('数值') || content.includes('世界') || content.includes('规则') || content.includes('设定') || content.includes('技能') || content.includes('魔法') || content.includes('法术') || content.includes('战技') || content.includes('种族') || content.includes('等级')
                         });
+                        const targetEntries = relevantEntries;
 
-                        // 如果没有特别相关的，取前 20 个 enabled 的条目作为上下文 (防止漏掉)
-                        const targetEntries = relevantEntries.length > 0 ? relevantEntries : activeEntries.slice(0, 20);
+
+                        // const targetEntries = activeEntries;
+
+
 
                         targetEntries.forEach(e => {
                             const keysStr = Array.isArray(e.keys) ? e.keys.join(', ') : '无关键字';

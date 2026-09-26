@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         DND 沉浸式仪表盘
 // @namespace    http://tampermonkey.net/
-// @version      2.0.3
+// @version      2.0.4
 // @description  专为 DND 模板设计的游戏风格仪表盘
 // @author       Niccole
 // @match        */*
@@ -817,7 +817,7 @@ const TavernSettingsSync = {
 
 
 
-const getCore = () => {
+const Utils_getCore = () => {
     try {
         let topWin = null;
         try {
@@ -1075,7 +1075,7 @@ const CONFIG = {
 const SCRIPT_ID = 'dnd_immersive_dashboard';
 
 const addStyles = () => {
-    const { $, window: coreWin } = getCore();
+    const { $, window: coreWin } = Utils_getCore();
     if (!$) return;
     const doc = coreWin?.document || document;
     const $root = coreWin?.jQuery || $;
@@ -17979,7 +17979,7 @@ const UpdateController = {
         }
         
         // 渲染全屏面板（如果可见）
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         if ($('#dnd-dashboard-root').hasClass('visible')) {
             const $activeItem = $('.dnd-nav-item.active');
             if ($activeItem.length && UIRenderer && UIRenderer.renderPanel) {
@@ -18156,7 +18156,7 @@ const DiceManager = {
                     console.log(`[DND Dashboard] Added ${addCount} dice rows.`);
                     
                     // 显示通知
-                    const { $ } = getCore();
+                    const { $ } = Utils_getCore();
                     if ($('#dnd-hud-status-text').length) {
                         // 临时显示状态
                         const $status = $('#dnd-hud-status-text');
@@ -18191,11 +18191,74 @@ const DataManager = {
     // [新增] 查找表键名 (模糊匹配)
     findTableKey: (rawData, nameFragment) => {
         if (!rawData) return null;
+        
+        // 19 张核心业务表的【英文 / 拼音 / 中文】映射字典
+        const aliasMap = {
+            // 1. 系统与全局
+            'SYS_GlobalState': '全局状态', 'SYS_GlobalStatus': '全局状态', 'quanjuzhuangtai': '全局状态',
+            
+            // 2. NPC管理
+            'NPC_Registry': 'NPC', 'npczhuce': 'NPC',
+            
+            // 3. 物品与背包
+            'ITEM_Inventory': '背包', 'beibao': '背包',
+            
+            // 4. 任务系统
+            'QUEST_Active': '任务', 'QUESTTracker': '任务', 'renwu': '任务',
+            
+            // 5. 阵营势力
+            'FACTION_Standing': '势力', 'shilishengwang': '势力',
+            
+            // 6. 战斗遭遇
+            'COMBAT_Encounter': '战斗遭遇', 'zhandouzaoyu': '战斗遭遇',
+            
+            // 7. 战术地图
+            'COMBAT_BattleMap': '战斗地图', 'zhandouditu': '战斗地图',
+            
+            // 8. 轮次纪要
+            'LOG_Summary': '纪要', 'jiyaobiao': '纪要',
+            
+            // 9. 行动选项
+            'UI_ActionOptions': '行动选项', 'xingdongxuanxiang': '行动选项',
+            
+            // 10. 随机数骰子池
+            'DICE_Pool': '骰子池', 'touzichi': '骰子池',
+            
+            // 11. 技能法术库
+            'SKILL_Library': '技能/法术库', 'jinengfashuku': '技能/法术库', 'jinengku': '技能', 'fashuku': '法术',
+            
+            // 12. 角色技能关联
+            'CHARACTER_Skills': '角色技能关联', 'juesejinengguanlian': '角色技能关联', 'jinengguanlian': '技能关联',
+            
+            // 13. 专长特性库
+            'FEAT_Library': '专长库', 'zhuanchangku': '专长库', 'texingku': '专长库',
+            
+            // 14. 角色专长关联
+            'CHARACTER_Feats': '角色专长关联', 'juesezhuanchangguanlian': '角色专长关联', 'zhuanchangguanlian': '专长关联',
+            
+            // 15. 角色档案
+            'CHARACTER_Registry': '角色表', 'juesebiao': '角色表', 'juesezhuce': '角色表',
+            
+            // 16. 角色战斗属性
+            'CHARACTER_Attributes': '角色属性', 'jueseshuxing': '角色属性',
+            
+            // 17. 角色资源池
+            'CHARACTER_Resources': '角色资源', 'jueseziyuan': '角色资源',
+            
+            // 18. 探索地图数据
+            'EXPLORATION_MapData': '探索地图数据', 'tansuoditushuju': '探索地图数据',
+            
+            // 19. 战斗地图绘制
+            'COMBAT_Map_Visuals': '战斗地图绘制', 'zhandoudituhuizhi': '战斗地图绘制'
+        };
+
+        const target = aliasMap[nameFragment] || nameFragment;
+
         return Object.keys(rawData).find(k =>
-            k === nameFragment ||
-            k.includes(nameFragment) ||
-            (rawData[k].name && rawData[k].name.includes(nameFragment))
-        );
+            k.toLowerCase().includes(nameFragment.toLowerCase()) ||
+            (rawData[k].uid && rawData[k].uid.toLowerCase().includes(nameFragment.toLowerCase())) ||
+            (rawData[k].name && rawData[k].name.includes(target))
+        ) || null;
     },
 
     // [新增] 在数据对象中应用系统通知 (不立即保存)
@@ -18229,10 +18292,10 @@ const DataManager = {
         await DiceManager.saveData(rawData);
     },
 
-    getAPI: () => getCore().getDB(),
+    getAPI: () => Utils_getCore().getDB(),
     
     // 增加一个辅助获取 Core 的方法，供其他模块使用（如 DiceManager）
-    getCore: getCore,
+    getCore: Utils_getCore,
 
     // 通用解析器：支持 JSON 和自定义字符串格式
     parseValue: (val, type = 'json') => {
@@ -18338,20 +18401,21 @@ const DataManager = {
         return rows.map(row => {
             const obj = {};
             headers.forEach((h, i) => {
-                if (h) obj[h] = row[i];
+                if (h) {
+                    obj[h] = row[i];
+                    obj[String(h).trim().toLowerCase()] = row[i]; // 自动注入小写键 (如 char_id)
+                    obj[String(h).trim().toUpperCase()] = row[i]; // 自动注入大写键 (如 CHAR_ID)
+                }
             });
             return obj;
         });
     },
 
     getTable: (tableNameFragment) => {
-        const data = DataManager.getAllData();
-        if (!data) return null;
-        
-        const key = Object.keys(data).find(k => k.includes(tableNameFragment) || (data[k].name && data[k].name.includes(tableNameFragment)));
-        if (!key) return null;
-        
-        return DataManager.parseSheet(data[key]);
+    const data = DataManager.getAllData();
+    if (!data) return null;
+    const key = DataManager.findTableKey(data, tableNameFragment);
+    return key ? DataManager.parseSheet(data[key]) : null;
     },
 
     getPartyData: () => {
@@ -18386,7 +18450,7 @@ const DataManager = {
         if (!links || !library) return [];
 
         // 兼容：尝试通过 ID 查找，或者通过名称查找
-        let charLinks = links.filter(l => l['CHAR_ID'] === charId);
+        let charLinks = links.filter(l => l['char_id'] === charId);
         
         // 如果按 ID 没找到，尝试按姓名
         if (charLinks.length === 0) {
@@ -18394,12 +18458,12 @@ const DataManager = {
              const char = party.find(p => p['姓名'] === charId);
              if (char) {
                  const realId = char['CHAR_ID'];
-                 charLinks = links.filter(l => l['CHAR_ID'] === realId);
+                 charLinks = links.filter(l => l['char_id'] === realId);
              }
         }
         
         return charLinks.map(link => {
-            const skill = library.find(s => s['SKILL_ID'] === link['SKILL_ID']);
+            const skill = library.find(s => s['skill_id'] === link['skill_id']);
             return { ...link, ...skill };
         });
     },
@@ -18410,19 +18474,19 @@ const DataManager = {
         
         if (!links || !library) return [];
 
-        let charLinks = links.filter(l => l['CHAR_ID'] === charId);
+        let charLinks = links.filter(l => l['char_id'] === charId);
         
         if (charLinks.length === 0) {
              const party = DataManager.getPartyData();
              const char = party.find(p => p['姓名'] === charId);
              if (char) {
                  const realId = char['CHAR_ID'];
-                 charLinks = links.filter(l => l['CHAR_ID'] === realId);
+                 charLinks = links.filter(l => l['char_id'] === realId);
              }
         }
         
         return charLinks.map(link => {
-            const feat = library.find(f => f['FEAT_ID'] === link['FEAT_ID']);
+            const feat = library.find(f => f['feat_id'] === link['feat_id']);
             return { ...link, ...feat };
         });
     },
@@ -18444,20 +18508,20 @@ const DataManager = {
         if (!links || !library) return [];
 
         // 筛选该角色的技能关联
-        let charLinks = links.filter(l => l['CHAR_ID'] === charId);
+        let charLinks = links.filter(l => l['char_id'] === charId);
         
         if (charLinks.length === 0) {
              const party = DataManager.getPartyData();
              const char = party.find(p => p['姓名'] === charId);
              if (char) {
                  const realId = char['CHAR_ID'];
-                 charLinks = links.filter(l => l['CHAR_ID'] === realId);
+                 charLinks = links.filter(l => l['char_id'] === realId);
              }
         }
         
         const spells = [];
         charLinks.forEach(link => {
-            const skill = library.find(s => s['SKILL_ID'] === link['SKILL_ID']);
+            const skill = library.find(s => s['skill_id'] === link['skill_id']);
             // 判断是否为法术 (仅当技能类型明确为'法术'时)
             // [修复] 移除对环阶的宽松判断，防止 '武技' 被误判为法术
             if (skill && skill['技能类型'] === '法术') {
@@ -18649,17 +18713,24 @@ const DataManager = {
                 if (!sheet || !sheet.content || sheet.content.length < 1) return;
                 
                 const headers = sheet.content[0];
-                // 尝试找到 ID 列 (CHAR_ID 或 PC_ID 或 姓名)
-                let idColName = 'CHAR_ID';
-                if (headers.includes('PC_ID')) idColName = 'PC_ID';
-                else if (headers.includes('姓名') && !headers.includes('CHAR_ID')) idColName = '姓名';
-                
+                // [修复] 尝试找到 ID 列（兼容 CHAR_ID / char_id / PC_ID / pc_id / 姓名 等不同模板写法）
+                let idColName = null;
+                for (const cand of ['CHAR_ID', 'char_id', 'PC_ID', 'pc_id']) {
+                    if (headers.includes(cand)) { idColName = cand; break; }
+                }
+                if (!idColName && headers.includes('姓名')) idColName = '姓名';
+                if (!idColName) return;
+
                 const idIdx = headers.indexOf(idColName);
                 if (idIdx === -1) return;
 
                 dataList.forEach(item => {
-                    // 确定该条目的 ID
-                    const itemId = item[idColName] || item['CHAR_ID'] || item['姓名'];
+                    // [修复] 确定该条目的 ID（兼容导出数据与目标表之间的大小写差异）
+                    const itemId = item[idColName] !== undefined ? item[idColName]
+                        : (item['CHAR_ID'] !== undefined ? item['CHAR_ID']
+                        : (item['char_id'] !== undefined ? item['char_id']
+                        : (item['PC_ID'] !== undefined ? item['PC_ID']
+                        : (item['pc_id'] !== undefined ? item['pc_id'] : item['姓名']))));
                     if (!itemId) return;
 
                     // 在表中查找对应行
@@ -18674,18 +18745,33 @@ const DataManager = {
                     }
 
                     if (rowIdx !== -1) {
-                        // 更新: 遍历 header，如果 item 中有对应字段则更新
+                        // [修复] 更新: 遍历 header，兼容大小写键（如 char_id / CHAR_ID）
                         headers.forEach((h, colIdx) => {
-                            if (item[h] !== undefined) {
-                                sheet.content[rowIdx][colIdx] = item[h];
+                            let v = item[h];
+                            if (v === undefined && typeof h === 'string') {
+                                v = item[h.toLowerCase()];
+                                if (v === undefined) v = item[h.toUpperCase()];
+                            }
+                            if (v !== undefined) {
+                                sheet.content[rowIdx][colIdx] = v;
                             }
                         });
                     } else {
-                        // 插入: 构建新行
-                        const newRow = headers.map(h => item[h] !== undefined ? item[h] : null);
-                        // 确保 ID 存在
-                        if (item[idColName] !== undefined) {
-                            newRow[idIdx] = item[idColName];
+                        // [修复] 插入: 构建新行（兼容大小写键）
+                        const newRow = headers.map(h => {
+                            let v = item[h];
+                            if (v === undefined && typeof h === 'string') {
+                                v = item[h.toLowerCase()];
+                                if (v === undefined) v = item[h.toUpperCase()];
+                            }
+                            return v !== undefined ? v : null;
+                        });
+                        // [修复] 确保 ID 存在（兼容大小写差异）
+                        const idVal = item[idColName] !== undefined ? item[idColName]
+                            : (item['CHAR_ID'] !== undefined ? item['CHAR_ID']
+                            : (item['char_id'] !== undefined ? item['char_id'] : item['姓名']));
+                        if (idVal !== undefined) {
+                            newRow[idIdx] = idVal;
                         }
                         sheet.content.push(newRow);
                     }
@@ -18749,8 +18835,8 @@ const DataManager = {
                         }
                         
                         // 2. 处理关联 (Link)
-                        const linkCharColIdx = linkHeaders.indexOf('CHAR_ID');
-                        const linkItemColIdx = linkHeaders.indexOf(idField);
+                        const linkCharColIdx = linkHeaders.findIndex(h => ['char_id', 'CHAR_ID'].includes(String(h).trim()));
+                        const linkItemColIdx = linkHeaders.findIndex(h => [idField.toLowerCase(), idField.toUpperCase(), idField].includes(String(h).trim()));
                         
                         if (linkCharColIdx !== -1 && linkItemColIdx !== -1) {
                             // 检查是否已存在关联
@@ -18760,9 +18846,18 @@ const DataManager = {
                             
                             if (!linkExists) {
                                 const newLinkRow = linkHeaders.map(h => {
-                                    if (h === 'LINK_ID') return 'LNK_' + Math.random().toString(36).substr(2, 8);
-                                    if (h === 'CHAR_ID') return charId;
-                                    if (h === idField) return itemId;
+                                    const col = String(h).trim().toLowerCase();
+                                    // 1. 生成关联主键 (SLINK_xxx 或 FLINK_xxx)
+                                    if (['skill_link_id', 'feat_link_id', 'link_id'].includes(col)) {
+                                        return (idField.toLowerCase().includes('skill') ? 'SLINK_' : 'FLINK_') + Math.random().toString(36).substr(2, 6);
+                                    }
+                                    // 2. 匹配角色 ID 列 (char_id / CHAR_ID)
+                                    if (col === 'char_id') return charId;
+                                    // 3. 匹配技能/专长 ID 列 (skill_id / feat_id)
+                                    if (col === idField.toLowerCase() || col === idField.toUpperCase()) return itemId;
+                                    // 4. 技能关联表默认设为已准备
+                                    if (col === '已准备' || col === 'yi_zhun_bei') return '是';
+                                    
                                     return item[h] !== undefined ? item[h] : null;
                                 });
                                 linkSheet.content.push(newLinkRow);
@@ -18947,6 +19042,8 @@ const DataManager = {
                 });
             }
 
+            //原作者: disocrd类脑 Niccole @niccole0414
+
             // 豁免
             const saves = [];
             Object.keys(abilities).forEach(k => {
@@ -19113,7 +19210,89 @@ const DataManager = {
             console.error('[DND DataManager] FVTT 导入失败:', err);
             return { success: false, message: '解析或保存失败: ' + err.message };
         }
-    }
+    },
+
+    // [新增] 在数据库中动态切换主角身份
+    updateMainCharacterInDB: async (targetCharId) => {
+        try {
+            const api = DataManager.getAPI();
+            if (!api) return { success: false, message: 'API 不可用' };
+
+            // 1. 获取当前完整数据
+            const rawData = DataManager.getAllData();
+            const tableKey = DataManager.findTableKey(rawData, 'CHARACTER_Registry');
+            if (!tableKey) return { success: false, message: '未找到角色注册表' };
+
+            const sheet = rawData[tableKey];
+            const headers = sheet.content[0];
+            const idIdx = headers.indexOf('CHAR_ID');
+            const typeIdx = headers.indexOf('成员类型');
+
+            if (idIdx === -1 || typeIdx === -1) return { success: false, message: '表结构异常' };
+
+            // 2. 遍历并修改：目标设为主角，其他设为同伴
+            let updatedCount = 0;
+            for (let i = 1; i < sheet.content.length; i++) {
+                const charId = sheet.content[i][idIdx];
+                if (charId === targetCharId) {
+                    sheet.content[i][typeIdx] = '主角';
+                    updatedCount++;
+                } else {
+                    // 如果原本是主角，则降级为同伴
+                    if (sheet.content[i][typeIdx] === '主角') {
+                        sheet.content[i][typeIdx] = '同伴';
+                    }
+                }
+            }
+
+            // 3. 写回数据库
+            await api.importTableAsJson(JSON.stringify(rawData));
+            console.log(`[DataManager] 数据库同步成功：已将 ${targetCharId} 设为主角`);
+            return { success: true };
+        } catch (err) {
+            console.error('[DataManager] 同步主角状态失败:', err);
+            return { success: false, message: err.message };
+        }
+    },
+
+
+
+
+    // [新增] 同步/创建酒馆用户角色 直接调用酒馆内核 API 同步/创建用户角色
+    syncSTUserPersona: async (name) => {
+        if (!name) return;
+        try {
+            // 1. 获取酒馆全局 Context
+            const core = Utils_getCore();
+            const stContext = window.SillyTavern?.getContext?.() || core?.getContext?.() || (typeof SillyTavern !== 'undefined' ? SillyTavern.getContext?.() : null);
+
+            // 2. 优先通过官方 Slash Command 切换 (/persona "角色名")
+            if (stContext && typeof stContext.executeSlashCommands === 'function') {
+                console.log(`[DataManager] 触发酒馆官方斜杠命令切换用户角色: ${name}`);
+                await stContext.executeSlashCommands(`/persona ${JSON.stringify(name)}`);
+                return;
+            }
+
+            // 3. 兜底方案：通过 DOM 模拟点击酒馆原生用户角色列表
+            const { $ } = Utils_getCore();
+            if ($) {
+                const $targetCard = $(`#persona_list .persona_item[title="${name}"], #persona_list .persona_item:contains("${name}")`);
+                if ($targetCard.length) {
+                    $targetCard.first().trigger('click');
+                    console.log(`[DataManager] 通过 DOM 模拟点击切换用户角色: ${name}`);
+                    return;
+                }
+            }
+
+            console.warn('[DataManager] 未找到可用的酒馆 Persona 切换接口');
+        } catch (err) {
+            console.error('[DataManager] 酒馆 Persona 切换失败:', err);
+        }
+    },
+
+    getAPI: () => Utils_getCore().getDB(),
+
+
 };
 
 ;// ./src/ui/modules/UIUtils.js
@@ -19131,7 +19310,7 @@ const NotificationSystem = {
 
     // 初始化容器
     _ensureContainer() {
-        const { $, window: coreWin } = getCore();
+        const { $, window: coreWin } = Utils_getCore();
         const $root = coreWin?.jQuery || $;
         const $body = $root('body').first();
         const bodyEl = $body?.[0] || document.body;
@@ -19161,7 +19340,7 @@ const NotificationSystem = {
      * @returns {boolean}
      */
     _shouldUseModalOverlay() {
-        const { $, window: coreWin } = getCore();
+        const { $, window: coreWin } = Utils_getCore();
         const $root = coreWin?.jQuery || $;
         const $dashboard = $root('#dnd-dashboard-root.visible');
         const $overlay = $root('#dnd-modal-overlay');
@@ -19180,7 +19359,7 @@ const NotificationSystem = {
      * @returns {Promise<void>}
      */
     notify(message, options = {}) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         this._ensureContainer();
         
         const {
@@ -19261,7 +19440,7 @@ const NotificationSystem = {
      * @private
      */
     _confirmViaModalOverlay(message, options = {}) {
-        const { $, window: coreWin } = getCore();
+        const { $, window: coreWin } = Utils_getCore();
         const $root = coreWin?.jQuery || $;
 
         const {
@@ -19352,7 +19531,7 @@ const NotificationSystem = {
      * @private
      */
     _confirmViaDialog(message, options = {}) {
-        const { $, window: coreWin } = getCore();
+        const { $, window: coreWin } = Utils_getCore();
         const $root = coreWin?.jQuery || $;
         this._ensureContainer();
         const doc = this._dialogContainer?.[0]?.ownerDocument || coreWin?.document || document;
@@ -19449,7 +19628,7 @@ const NotificationSystem = {
      * @private
      */
     _promptViaModalOverlay(message, options = {}) {
-        const { $, window: coreWin } = getCore();
+        const { $, window: coreWin } = Utils_getCore();
         const $root = coreWin?.jQuery || $;
 
         const {
@@ -19459,6 +19638,8 @@ const NotificationSystem = {
             confirmText = '确定',
             cancelText = '取消'
         } = options;
+
+        //原作者: disocrd类脑 Niccole @niccole0414
 
         return new Promise((resolve) => {
             const $overlay = $root('#dnd-modal-overlay');
@@ -19561,7 +19742,7 @@ const NotificationSystem = {
      * @private
      */
     _promptViaDialog(message, options = {}) {
-        const { $, window: coreWin } = getCore();
+        const { $, window: coreWin } = Utils_getCore();
         const $root = coreWin?.jQuery || $;
         this._ensureContainer();
         const doc = this._dialogContainer?.[0]?.ownerDocument || coreWin?.document || document;
@@ -19712,7 +19893,7 @@ const NotificationSystem = {
 
     // 辅助：填入聊天框
     fillChatInput(text) {
-        const { $, window: w } = getCore();
+        const { $, window: w } = Utils_getCore();
         // 尝试查找 SillyTavern 的输入框
         const $input = $('#send_textarea');
         if ($input.length) {
@@ -19835,7 +20016,7 @@ const UIEffects = {
      * @param {HTMLElement|jQuery} element - 目标元素
      */
     addRippleEffect(e, element) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const $el = $(element);
         
         // 确保元素有相对定位和overflow hidden
@@ -19870,7 +20051,7 @@ const UIEffects = {
      * 初始化全局涟漪效果监听器
      */
     initRippleListeners() {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         
         // 为所有带有 dnd-btn-ripple 类的元素添加涟漪效果
         $(document).on('click', '.dnd-btn-ripple', function(e) {
@@ -20109,7 +20290,7 @@ const ThemeManager = {
     // 内部方法：应用 CSS 变量
     _applyVars: (vars) => {
         try {
-            const { window: coreWin } = getCore();
+            const { window: coreWin } = Utils_getCore();
             let root;
             try {
                 root = coreWin.document.documentElement;
@@ -20996,7 +21177,7 @@ const StyleEffects = {
      * 清除特效样式
      */
     clear() {
-        const { window: coreWin } = getCore();
+        const { window: coreWin } = Utils_getCore();
         const doc = coreWin?.document || document;
         const el = doc.getElementById(this.EFFECTS_STYLE_ID);
         if (el) el.remove();
@@ -22119,7 +22300,7 @@ const StyleEffects = {
     // ==================== 工具方法 ====================
     
     _injectStyles(cssText) {
-        const { window: coreWin } = getCore();
+        const { window: coreWin } = Utils_getCore();
         const doc = coreWin?.document || document;
         
         // 先清除旧的
@@ -26638,6 +26819,7 @@ const STYLE_PRESETS = {
     },
 
     // 9. 玫瑰庭院 (优雅、浪漫) - 玫瑰粉、深色背景、成熟优雅
+    //原作者: disocrd类脑 Niccole @niccole0414
     'rose-garden': {
         meta: {
             id: 'rose-garden',
@@ -28127,7 +28309,7 @@ const StyleManager = {
 
             // 8. [新增] 应用动态背景配置
             // 获取 UI 核心引用以调用背景更新
-            const { window: coreWin } = getCore();
+            const { window: coreWin } = Utils_getCore();
             if (coreWin && coreWin.DND_Dashboard_UI && coreWin.DND_Dashboard_UI.updateDynamicBackground) {
                 // 如果 stylePack 中没有 background 字段，使用默认配置
                 const bgConfig = stylePack.background || {
@@ -28306,7 +28488,7 @@ const StyleManager = {
     _clearPreviousStyleVars() {
         if (this._lastAppliedVars.size === 0) return;
         
-        const { window: coreWin } = getCore();
+        const { window: coreWin } = Utils_getCore();
         let root;
         try {
             root = coreWin?.document?.documentElement || document.documentElement;
@@ -28334,7 +28516,7 @@ const StyleManager = {
      * 注意：此方法应用的变量不记录到 _lastAppliedVars，因为它们是主题基准
      */
     _restoreThemeBaseline() {
-        const { window: coreWin } = getCore();
+        const { window: coreWin } = Utils_getCore();
         let root;
         try {
             root = coreWin?.document?.documentElement || document.documentElement;
@@ -28371,7 +28553,7 @@ const StyleManager = {
      * 应用颜色变量（包含渐变生成）
      */
     _applyColorVars(colors) {
-        const { window: coreWin } = getCore();
+        const { window: coreWin } = Utils_getCore();
         let root;
         try {
             root = coreWin?.document?.documentElement || document.documentElement;
@@ -28412,7 +28594,7 @@ const StyleManager = {
      * 应用通用CSS变量
      */
     _applyVars(vars) {
-        const { window: coreWin } = getCore();
+        const { window: coreWin } = Utils_getCore();
         let root;
         try {
             root = coreWin?.document?.documentElement || document.documentElement;
@@ -28435,7 +28617,7 @@ const StyleManager = {
     _applyMorphology(morphology) {
         if (!morphology || typeof morphology !== 'object') return;
         
-        const { window: coreWin } = getCore();
+        const { window: coreWin } = Utils_getCore();
         let root;
         try {
             root = coreWin?.document?.documentElement || document.documentElement;
@@ -28526,7 +28708,7 @@ const StyleManager = {
     _applyInteractiveStates(interactiveStates) {
         if (!interactiveStates || typeof interactiveStates !== 'object') return;
         
-        const { window: coreWin } = getCore();
+        const { window: coreWin } = Utils_getCore();
         let root;
         try {
             root = coreWin?.document?.documentElement || document.documentElement;
@@ -28693,7 +28875,7 @@ const StyleManager = {
      * 应用组件覆盖样式
      */
     _applyOverrides(overrides) {
-        const { $, window: coreWin } = getCore();
+        const { $, window: coreWin } = Utils_getCore();
         const doc = coreWin?.document || document;
         
         // 移除旧的覆盖样式
@@ -28730,7 +28912,7 @@ const StyleManager = {
      * 清除覆盖样式
      */
     _clearOverrides() {
-        const { $, window: coreWin } = getCore();
+        const { $, window: coreWin } = Utils_getCore();
         const doc = coreWin?.document || document;
         
         const existingStyle = doc.getElementById(this.STYLE_ELEMENT_ID);
@@ -28928,7 +29110,7 @@ const PresetSwitcher = {
             isCombat = false; // Default to non-combat style
         }
 
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const $status = $('#dnd-hud-status-text');
         if (!$status.length) return;
         
@@ -29206,7 +29388,7 @@ const DynamicBackground = {
      * @returns {string} 效果实例ID
      */
     init(container, effectType = 'particles', customConfig = {}) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const $container = typeof container === 'string' ? $(container) : $(container);
         
         if (!$container.length) {
@@ -30924,7 +31106,7 @@ const UITableManager = {
 
     // 注入样式
     injectStyles() {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         if (this.state.stylesInjected) return;
         if ($('#dnd-table-manager-styles').length === 0) {
             $('head').append(TABLE_MANAGER_STYLES);
@@ -30934,7 +31116,7 @@ const UITableManager = {
 
     // [新增] 初始化监听器
     init() {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         if (this._initialized) return;
         this._initialized = true;
         
@@ -30974,7 +31156,7 @@ const UITableManager = {
     },
 
     updateButtonLayout() {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const $container = $('#dnd-tm-table-buttons');
         if (!$container.length) return;
 
@@ -31007,7 +31189,7 @@ const UITableManager = {
 
     // 渲染入口
     async render($container) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         $container.empty();
         
         // 确保初始化
@@ -31176,7 +31358,7 @@ const UITableManager = {
 
     // 渲染卡片
     renderCards($container, tableKey) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         $container.empty();
 
         if (!tableKey) return;
@@ -31389,7 +31571,7 @@ const UITableManager = {
     
     // 执行搜索
     performSearch(keyword) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         
         if (!this.state.currentTableKey) return;
         
@@ -31423,7 +31605,7 @@ const UITableManager = {
     
     // 清除搜索
     clearSearch() {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         this.state.searchKeyword = '';
         this.state.filteredRowIndices = null;
         $('#dnd-tm-search').val('');
@@ -31432,7 +31614,7 @@ const UITableManager = {
     
     // 更新搜索计数
     updateSearchCount(visible, total) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const $count = $('#dnd-tm-search-count');
         
         if (total === 0) {
@@ -31448,7 +31630,7 @@ const UITableManager = {
     
     // 新增记录
     async addRecord(tableKey) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const $btn = $('#dnd-tm-add-record');
         
         $btn.prop('disabled', true).html('<i class="fa-solid fa-spinner fa-spin"></i>');
@@ -31497,7 +31679,7 @@ const UITableManager = {
     
     // 删除记录
     async deleteRecord(tableKey, rowIndex, $card) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         
         // 显示确认对话框
         const confirmed = await this.showConfirmDialog(
@@ -31558,7 +31740,7 @@ const UITableManager = {
     
     // 显示确认对话框
     showConfirmDialog(title, message) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         
         return new Promise(resolve => {
             // 尝试从多个来源获取视口尺寸
@@ -31627,7 +31809,7 @@ const UITableManager = {
     
     // 切换字段布局
     toggleFieldLayout() {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         
         // 切换状态
         this.state.fieldLayout = this.state.fieldLayout === 'single' ? 'double' : 'single';
@@ -31791,7 +31973,7 @@ function getWeatherIcon(weatherText) {
 
     // [新增] 应用浮动球可见性设置
     async applyFloatingBallVisibility() {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const savedHide = await DBAdapter.getSetting(CONFIG.STORAGE_KEYS.HIDE_FLOATING_BALL);
         this._hideFloatingBall = savedHide === true || savedHide === 'true';
         this._miniHudPos = this._parseSavedPosition(await DBAdapter.getSetting(CONFIG.STORAGE_KEYS.MINI_HUD_POS));
@@ -31817,7 +31999,7 @@ function getWeatherIcon(weatherText) {
     },
 
     _getHelperButtonAPI() {
-        const { window: coreWin } = getCore();
+        const { window: coreWin } = Utils_getCore();
         const candidates = [];
         const addCandidate = (candidate) => {
             if (candidate && !candidates.includes(candidate)) candidates.push(candidate);
@@ -31945,16 +32127,44 @@ function getWeatherIcon(weatherText) {
             if (scheduleRetry) this._scheduleHelperButtonRetry();
         }
     },
-
+    
     setControlledCharacter(charId) {
+        const oldCharId = this._controlledCharId;
+
+
+        //获取操纵角色的名字
+        const party = DataManager.getPartyData();
+        const char = party.find(p => p['CHAR_ID'] === charId || p['PC_ID'] === charId || p['姓名'] === charId);
+
         this._controlledCharId = charId;
-        // [修复] 先初始化追踪器快照，再渲染HUD，防止显示错误的资源消耗
+        
+        // [修复] 切换角色时，通知战斗模块保存旧资源并加载/重置新角色资源
+        if (typeof this.switchTurnContext === 'function') {
+            this.switchTurnContext(oldCharId, charId);
+        } else if (typeof this.resetActionEconomy === 'function') {
+            // 如果没有编写复杂的切换逻辑，至少要重置一次动作经济以刷新速度
+            this.resetActionEconomy();
+        }
+        
         if (this.initResourceTracker) this.initResourceTracker();
+
+        //在数据库内切换主角
+        if (charId && DataManager.updateMainCharacterInDB) {
+            DataManager.updateMainCharacterInDB(charId);
+        }
+
+
+        //在酒馆原生用户角色中切换主角
+        if (char && char['姓名'] && DataManager.syncSTUserPersona) {
+            DataManager.syncSTUserPersona(char['姓名']);
+        }
+
         // 刷新战斗HUD
         this.renderHUD();
         // 显示切换通知
         PresetSwitcher.showNotification(true, `已切换操控: ${charId || '默认'}`);
     },
+
 
     getControlledCharacter() {
         if (this._controlledCharId) {
@@ -31989,7 +32199,7 @@ function getWeatherIcon(weatherText) {
 
     // [新增] 应用 UI 缩放
     applyUIScale(scale) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const s = parseFloat(scale) || 1.0;
         
         // 设置 CSS 变量 (供 CSS 引用)
@@ -32063,7 +32273,7 @@ function getWeatherIcon(weatherText) {
     },
 
     setState(newState) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         this.state = newState;
         
         const $full = $('#dnd-dashboard-root');
@@ -32109,7 +32319,7 @@ function getWeatherIcon(weatherText) {
 
     // [新增] 初始化动态背景
     _initDynamicBackground(mode) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         
         // 从设置中获取背景效果类型 (默认 particles)
         const effectType = CONFIG.DYNAMIC_BG?.type || 'particles';
@@ -32163,7 +32373,7 @@ function getWeatherIcon(weatherText) {
 
     // [新增] 隐藏表格管理器面板，在 HUD 隐藏时调用
     _hideTableManager() {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         
         // 隐藏表格管理器容器
         const $tmContainer = $('#dnd-table-manager-container');
@@ -32228,7 +32438,7 @@ function getWeatherIcon(weatherText) {
 
     init() {
         Logger.info('[UIRenderer] init() called');
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         
         // [修复] 热更新支持：如果有旧的实例，先清除
         // 始终尝试清除，不仅仅是检测到 ID 时，以防万一有残留的监听器或变量
@@ -32700,7 +32910,7 @@ function getWeatherIcon(weatherText) {
                 const idx = parseInt(key) - 1;
                 const party = DataManager.getPartyData();
                 if (party && party[idx]) {
-                    const { window: coreWin } = getCore();
+                    const { window: coreWin } = Utils_getCore();
                     this.showCharacterCard(party[idx], { clientX: coreWin.innerWidth / 2, clientY: 100 });
                     e.preventDefault();
                     return;
@@ -32784,7 +32994,7 @@ function getWeatherIcon(weatherText) {
 
 
 async function invokeManualUpdate(event) {
-    const { $, getDB } = getCore();
+    const { $, getDB } = Utils_getCore();
     const $btn = event ? $(event.currentTarget).closest('.dnd-footer-btn') : $();
     const $icon = $btn.find('.dnd-refresh-icon i');
     const api = typeof getDB === 'function' ? getDB() : null;
@@ -32807,7 +33017,7 @@ async function invokeManualUpdate(event) {
             throw new Error('数据库插件返回失败');
         }
 
-        const globalUI = window.DND_Dashboard_UI || getCore().window?.DND_Dashboard_UI;
+        const globalUI = window.DND_Dashboard_UI || Utils_getCore().window?.DND_Dashboard_UI;
         if (globalUI) {
             if (globalUI.state === 'mini' && typeof globalUI.renderHUD === 'function') {
                 setTimeout(() => globalUI.renderHUD(), 50);
@@ -32838,7 +33048,7 @@ async function invokeManualUpdate(event) {
 
 /* harmony default export */ const UIHUD = ({
     async renderHUD() {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const $hud = $('#dnd-mini-hud');
         const $body = $('#dnd-hud-body');
         const $status = $('#dnd-hud-status-text');
@@ -32991,7 +33201,7 @@ async function invokeManualUpdate(event) {
 
         // [新增] 更新 HUD 位置使其跟随悬浮球
     updateHUDPosition() {
-        const { $, window: coreWin } = getCore(); // 获取正确的 window 对象
+        const { $, window: coreWin } = Utils_getCore(); // 获取正确的 window 对象
         // [修复] 使用 coreWin 获取尺寸，确保与 DOM 元素所在的文档一致 (兼容 iframe)
         const winW = coreWin.innerWidth || $(coreWin).width();
         
@@ -33081,7 +33291,7 @@ async function invokeManualUpdate(event) {
 
     // [新增] 初始化 Mini HUD 独立拖拽功能
     initIndependentDrag() {
-        const { $, window: coreWin } = getCore();
+        const { $, window: coreWin } = Utils_getCore();
         const $hud = $('#dnd-mini-hud');
         const $header = $hud.find('.dnd-hud-header');
         
@@ -33194,7 +33404,7 @@ async function invokeManualUpdate(event) {
 
     // [新增] 显示位置设置对话框
     showPositionDialog() {
-        const { $, window: coreWin } = getCore();
+        const { $, window: coreWin } = Utils_getCore();
         $('#dnd-position-dialog').remove();
         
         const $btn = $('#dnd-toggle-btn');
@@ -33278,7 +33488,7 @@ async function invokeManualUpdate(event) {
     },
 
     renderCombatHUD($container, showMiniMap) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const encounters = DataManager.getTable('COMBAT_Encounter');
         const partyData = DataManager.getPartyData() || [];
         const global = DataManager.getTable('SYS_GlobalState');
@@ -33286,10 +33496,17 @@ async function invokeManualUpdate(event) {
         
         // 布局
         let html = `<div class="dnd-hud-combat-layout">`;
+
+        const activeChar = this.getControlledCharacter();
+        const activeId = activeChar ? (activeChar['CHAR_ID'] || activeChar['PC_ID'] || activeChar['姓名']) : null;
+        if (activeId && !this._turnResources[activeId]) {
+            this.resetActionEconomy(activeId);
+        }
         
         // 左侧：迷你地图（根据设置决定是否显示）
-        const turnRes = this._turnResources || { action: 1, bonus: 1, reaction: 1, movement: 30 };
-        
+        //const turnRes = this._turnResources || { action: 1, bonus: 1, reaction: 1, movement: 30 };
+        const turnRes = (activeId && this._turnResources[activeId]) ? this._turnResources[activeId] : { action: 1, bonus: 1, reaction: 1, movement: 30 };
+
         html += `
             <div style="display:flex;flex-direction:column;gap:5px;">
                 ${showMiniMap ? '<div class="dnd-hud-minimap" id="dnd-hud-minimap-content" style="width:180px;height:180px;"></div>' : ''}
@@ -33313,12 +33530,14 @@ async function invokeManualUpdate(event) {
                         cursor: pointer;
                         font-weight: bold;
                         font-size: 12px;
+
                     " onclick="window.DND_Dashboard_UI.startTargeting({
                         type: 'move',
-                        rangeText: '30尺',
+                        rangeText: (this._turnResources && (DataManager.getControlledCharacter() ? (DataManager.getControlledCharacter()['CHAR_ID'] || DataManager.getControlledCharacter()['PC_ID'] || DataManager.getControlledCharacter()['姓名']) : null)) ? (this._turnResources[DataManager.getControlledCharacter()['CHAR_ID'] || DataManager.getControlledCharacter()['PC_ID'] || DataManager.getControlledCharacter()['姓名']]?.movement + '尺') : '30尺',
                         skillName: '移动',
                         callback: (res) => window.DND_Dashboard_UI.executeAction('move', res)
                     })"><i class="fa-solid fa-person-walking"></i> 移动</button>
+
                     <button class="dnd-clickable" style="
                         flex: 1;
                         background: linear-gradient(135deg, var(--dnd-bg-secondary), var(--dnd-text-highlight));
@@ -33425,7 +33644,7 @@ async function invokeManualUpdate(event) {
     },
 
     renderExploreHUD($container, showMiniMap) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
 
         // 0. 渲染探索地图 (根据设置决定是否显示)
         if (showMiniMap) {
@@ -33475,7 +33694,7 @@ async function invokeManualUpdate(event) {
 
     // [新增] 渲染行动选项
     async renderActionOptions($container) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const optionsTable = DataManager.getTable('UI_ActionOptions');
         if (!optionsTable || optionsTable.length === 0) return;
         
@@ -33537,7 +33756,7 @@ async function invokeManualUpdate(event) {
 
     // [新增] 渲染横向队伍栏 (Refactored to use CSS classes)
     renderPartyBar($container) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const party = DataManager.getPartyData();
         if (!party || party.length === 0) return;
 
@@ -33665,7 +33884,7 @@ async function invokeManualUpdate(event) {
     },
 
     renderFooter($container) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         
         // 获取当前操控角色资源
         const char = this.getControlledCharacter();
@@ -33821,6 +34040,8 @@ async function invokeManualUpdate(event) {
         $container.append($footerEl);
     },
 
+    //原作者: disocrd类脑 Niccole @niccole0414
+
     // [新增] 手动触发神数据库更新
     async triggerManualUpdate(event) {
         return invokeManualUpdate(event);
@@ -33902,7 +34123,7 @@ async function invokeManualUpdate(event) {
 
     // [新增] 过滤NPC列表
     filterNPCList() {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const searchText = ($('#dnd-npc-search').val() || '').toLowerCase();
         const statusFilter = $('#dnd-npc-filter').val();
         
@@ -34010,7 +34231,7 @@ async function invokeManualUpdate(event) {
 
     // [新增] 渲染迷你法术位
     renderMiniSpellSlots($container) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         // 获取当前操控角色
         const char = this.getControlledCharacter();
         
@@ -34427,35 +34648,121 @@ const TavernAPI = {
         }
     },
 
+
+    /**
+     * 获取酒馆中所有可用的世界书名称列表 (四重真实保障提取)
+     * @returns {Promise<Array<string>>}
+     */
+    getAllWorldbookNames: async function() {
+        const { TavernHelper, SillyTavern } = this.getCore();
+        const names = new Set();
+
+        // 1. 最强绝对保障：直接请求酒馆后端官方接口，获取底层字典键名
+        try {
+            const headers = SillyTavern?.getRequestHeaders ? SillyTavern.getRequestHeaders() : {};
+            const res = await fetch('/api/worldinfo', {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json', ...headers }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                // 返回的 data 是以世界书名字为 Key 的对象字典
+                if (data && typeof data === 'object' && !Array.isArray(data)) {
+                    Object.keys(data).forEach(k => names.add(String(k).trim()));
+                }
+            }
+        } catch (e) {
+            console.warn('[TavernAPI] 通过 GET /api/worldinfo 获取失败:', e);
+        }
+
+        // 2. 保障二：读取酒馆原生前端全局变量 (兼容旧版非模块化酒馆)
+        try {
+            const win = window.parent || window;
+            if (win.world_names && Array.isArray(win.world_names)) {
+                win.world_names.forEach(n => names.add(String(n).trim()));
+            }
+            if (win.world_info_data) {
+                Object.keys(win.world_info_data).forEach(n => names.add(String(n).trim()));
+            }
+        } catch (e) {}
+
+        // 3. 保障三：DOM 暴力抓取 (直接去酒馆页面找所有相关的下拉框)
+        try {
+            const { $ } = getCore();
+            if ($) {
+                const doc = window.parent?.document || window.document;
+                $(doc).find('#world_editor_select option, #character_world_info option, .world_info_select option').each(function() {
+                    const val = $(this).attr('value') || $(this).text();
+                    if (val && !['', 'none', 'null', '0'].includes(String(val).toLowerCase()) && !val.startsWith('--')) {
+                        names.add(String(val).trim());
+                    }
+                });
+            }
+        } catch (e) {}
+
+        // 4. 保障四：从酒馆助手获取当前已绑定的世界书 (兜底)
+        try {
+            if (TavernHelper) {
+                if (typeof TavernHelper.getGlobalWorldbookNames === 'function') {
+                    (TavernHelper.getGlobalWorldbookNames() || []).forEach(n => names.add(String(n).trim()));
+                }
+                if (typeof TavernHelper.getChatWorldbookName === 'function') {
+                    const cb = TavernHelper.getChatWorldbookName('current');
+                    if (cb) names.add(String(cb).trim());
+                }
+                if (typeof TavernHelper.getCharWorldbookNames === 'function') {
+                    const cbs = TavernHelper.getCharWorldbookNames('current') || {};
+                    if (cbs.primary) names.add(String(cbs.primary).trim());
+                    if (Array.isArray(cbs.additional)) cbs.additional.forEach(n => names.add(String(n).trim()));
+                }
+            }
+        } catch (e) {}
+
+        // 过滤掉系统自带的占位符选项和空值
+        const result = Array.from(names).filter(n => 
+            n && 
+            n !== 'No World Info' && 
+            n !== 'Select World Info' && 
+            n !== 'No specific world'
+        );
+        
+        console.log('[TavernAPI] 已成功获取酒馆世界书列表:', result);
+        return result;
+    },
+
     /**
      * 获取当前启用的世界书内容
      * @returns {Promise<string>} 世界书内容摘要
      */
-    getEnabledWorldInfo: async function() {
+    getEnabledWorldInfo: async function(customWorldbooks = null) {
         const { TavernHelper } = this.getCore();
         if (!TavernHelper) return '';
 
         try {
             const worldbooks = new Set();
             
-            // 1. 全局世界书
-            if (TavernHelper.getGlobalWorldbookNames) {
-                const globals = TavernHelper.getGlobalWorldbookNames();
-                if (Array.isArray(globals)) globals.forEach(n => worldbooks.add(n));
-            }
+            // 1. 如果传入了自定义世界书名称，则优先读取指定的世界书
+            if (customWorldbooks) {
+                const list = Array.isArray(customWorldbooks) ? customWorldbooks : [customWorldbooks];
+                list.filter(Boolean).forEach(n => worldbooks.add(String(n).trim()));
+            } else {
+                // 2. 未指定时：自动读取酒馆当前全局、聊天与角色绑定的世界书
+                if (TavernHelper.getGlobalWorldbookNames) {
+                    const globals = TavernHelper.getGlobalWorldbookNames();
+                    if (Array.isArray(globals)) globals.forEach(n => worldbooks.add(n));
+                }
 
-            // 2. 聊天世界书
-            if (TavernHelper.getChatWorldbookName) {
-                const chatBook = TavernHelper.getChatWorldbookName('current');
-                if (chatBook) worldbooks.add(chatBook);
-            }
+                if (TavernHelper.getChatWorldbookName) {
+                    const chatBook = TavernHelper.getChatWorldbookName('current');
+                    if (chatBook) worldbooks.add(chatBook);
+                }
 
-            // 3. 角色世界书
-            if (TavernHelper.getCharWorldbookNames) {
-                const charBooks = TavernHelper.getCharWorldbookNames('current');
-                if (charBooks) {
-                    if (charBooks.primary) worldbooks.add(charBooks.primary);
-                    if (Array.isArray(charBooks.additional)) charBooks.additional.forEach(n => worldbooks.add(n));
+                if (TavernHelper.getCharWorldbookNames) {
+                    const charBooks = TavernHelper.getCharWorldbookNames('current');
+                    if (charBooks) {
+                        if (charBooks.primary) worldbooks.add(charBooks.primary);
+                        if (Array.isArray(charBooks.additional)) charBooks.additional.forEach(n => worldbooks.add(n));
+                    }
                 }
             }
 
@@ -34469,20 +34776,33 @@ const TavernAPI = {
                     const entries = await TavernHelper.getWorldbook(bookName);
                     if (entries && entries.length > 0) {
                         context += `\n--- 世界书: ${bookName} ---\n`;
-                        // 筛选启用的条目
-                        const activeEntries = entries.filter(e => e.enabled);
+
+                        // [新增] 排除关键词列表（可在此自由增减需要忽略的词）
+                        const excludeWords = ['命定系统', '纪要-', 'TavernDB-', '角色信息-', '角色属性'];
+
+                        // 筛选启用条目，并直接剔除包含排除词的条目
+                        const activeEntries = entries.filter(e => {
+                            if (!e.enabled) return false;
+                            const text = ((Array.isArray(e.keys) ? e.keys : []).join(',') + (e.content || '')).toLowerCase();
+                            return !excludeWords.some(w => text.includes(w.toLowerCase()));
+                        });
                         
                         // 简单摘要: 仅提取关键字和部分内容，避免 Token 过多
                         // 优先提取: 职业, 种族, 等级, 魔法, 规则
+
+
                         const relevantEntries = activeEntries.filter(e => {
                             const keys = (Array.isArray(e.keys) ? e.keys : []).join(',').toLowerCase();
                             const content = (e.content || '').toLowerCase();
-                            return keys.includes('class') || keys.includes('race') || keys.includes('level') || keys.includes('magic') || keys.includes('rule') ||
-                                   content.includes('职业') || content.includes('种族') || content.includes('等级') || content.includes('规则');
+                            return keys.includes('数值') || keys.includes('世界') || keys.includes('规则') || keys.includes('设定') || keys.includes('技能') || keys.includes('魔法') || keys.includes('法术') || keys.includes('战技') || keys.includes('种族') || keys.includes('等级') ||
+                                   content.includes('数值') || content.includes('世界') || content.includes('规则') || content.includes('设定') || content.includes('技能') || content.includes('魔法') || content.includes('法术') || content.includes('战技') || content.includes('种族') || content.includes('等级')
                         });
+                        const targetEntries = relevantEntries;
 
-                        // 如果没有特别相关的，取前 20 个 enabled 的条目作为上下文 (防止漏掉)
-                        const targetEntries = relevantEntries.length > 0 ? relevantEntries : activeEntries.slice(0, 20);
+
+                        // const targetEntries = activeEntries;
+
+
 
                         targetEntries.forEach(e => {
                             const keysStr = Array.isArray(e.keys) ? e.keys.join(', ') : '无关键字';
@@ -34582,13 +34902,13 @@ const SettingsManager = {
     }
 };
 
-;// ./dist/DND仪表盘配套模板.json
-const DND_namespaceObject = /*#__PURE__*/JSON.parse('{"mate":{"type":"chatSheets","version":1,"updateConfigUiSentinel":-1,"globalInjectionConfig":{"readableEntryPlacement":{"position":"before_character_definition","depth":2,"order":99981},"wrapperPlacement":{"position":"before_character_definition","depth":2,"order":99980}}},"sheet_SYS_GlobalState":{"uid":"sheet_SYS_GlobalState","name":"🌍 全局状态","sourceData":{"note":"【系统核心表】记录游戏世界的全局状态，此表有且仅有一行数据。\\n\\n| 列名 | 类型 | 说明 |\\n|------|------|------|\\n| 当前场景 | string | 主角当前所在的具体场景名称 |\\n| 场景描述 | string | 当前场景的环境描述（光线、氛围、危险度）|\\n| 游戏时间 | datetime | 格式：YYYY-MM-DD HH:MM（必须精确，禁止模糊）|\\n| 上轮时间 | datetime | 上一轮交互结束时的精确时间 |\\n| 流逝时长 | string | 本轮与上轮的时间差（如：2小时30分钟）|\\n| 天气状况 | string | 当前天气及对行动的影响 |\\n| 战斗模式 | enum | 值域：[非战斗/战斗中/战斗结束]，决定战斗表是否激活 |\\n| 当前回合 | int | 战斗中的回合计数，非战斗时为0 |\\n| 系统通知 | string | 系统通知信息，由系统自动更新，禁止手动更改 |","initNode":"【初始化】\\n1. 根据剧情设定填写初始场景和时间\\n2. 时间必须是明确的日期时间，禁止使用\\"未知\\"或\\"某天\\"\\n3. 战斗模式设为\\"非战斗\\"\\n4. 当前回合设为0","updateNode":"【每轮必须更新】\\n1. 将当前时间复制到上轮时间\\n2. 根据剧情推进更新当前时间\\n3. 计算并填写流逝时长\\n4. 场景变化时更新场景信息\\n5. 进入/退出战斗时更新战斗模式","insertNode":"【禁止】此表只能有一行","deleteNode":"【禁止】不允许删除"},"content":[[null,"当前场景","场景描述","游戏时间","上轮时间","流逝时长","天气状况","战斗模式","当前回合","系统通知"]],"updateConfig":{"batchSize":-1,"uiSentinel":-1},"exportConfig":{"enabled":false,"splitByRow":false,"entryName":"全局状态","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"🌍 全局状态-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991}},"orderNo":0},"sheet_NPC_Registry":{"uid":"sheet_NPC_Registry","name":"👥 NPC注册表","sourceData":{"note":"【NPC统一管理表】所有重要NPC的唯一数据源，通过NPC_ID关联其他表。\\n\\n| 列名 | 类型 | 说明 |\\n|------|------|------|\\n| NPC_ID | pk | 主键，格式：NPC_XXX（如NPC_001） |\\n| 姓名 | string | NPC全名，死亡时在末尾加†符号 |\\n| 种族/性别/年龄 | string | 基础信息 |\\n| 职业/身份 | string | 社会角色或职业 |\\n| 外貌描述 | text | 客观的外貌描写 |\\n| 等级 | int | NPC职业等级，怪物可用CR值 |\\n| HP | string | 生命值，格式：当前/最大（如：45/52） |\\n| AC | int | 护甲等级 |\\n| 主要技能 | string | 常用技能/法术/能力，逗号分隔（如：剑术精通, 二次攻击） |\\n| 随身物品 | string | 身上携带的物品，逗号分隔（如：长剑, 皮甲, 治疗药水x2） |\\n| 当前状态 | enum | [在场/离场/死亡/失踪] |\\n| 所在位置 | string | 当前所在的场景名 |\\n| 与主角关系 | string | 关系描述（如：盟友、敌人、雇主）|","initNode":"【初始化】为开局剧情中的重要NPC创建条目，包括基础战斗数据（等级、HP、AC）和技能物品","updateNode":"【触发条件】\\n- 状态变化时更新当前状态和位置\\n- 关系变化时更新与主角关系\\n- 死亡时在姓名后加†，状态改为死亡\\n- 受伤/治疗时更新HP\\n- 获得/失去物品时更新随身物品","insertNode":"【触发条件】新的重要NPC登场且需要长期追踪时添加","deleteNode":"【禁止】NPC数据不删除，只标记状态"},"content":[[null,"NPC_ID","姓名","种族/性别/年龄","职业/身份","外貌描述","等级","HP","AC","主要技能","随身物品","当前状态","所在位置","与主角关系","关键经历"]],"updateConfig":{"batchSize":-1,"uiSentinel":-1},"exportConfig":{"enabled":false,"splitByRow":true,"entryName":"NPC信息","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"👥 NPC注册表-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991}},"orderNo":1},"sheet_ITEM_Inventory":{"uid":"sheet_ITEM_Inventory","name":"🎒 背包","sourceData":{"note":"【物品管理表】记录队伍成员持有的所有物品。每件物品通过[所属人]字段标识归属。\\n\\n| 列名 | 类型 | 说明 |\\n|------|------|------|\\n| 物品ID | pk | 主键，格式：ITEM_XXX |\\n| 物品名称 | string | 物品名 |\\n| 类别 | enum | [武器/护甲/消耗品/工具/杂物/魔法物品] |\\n| 数量 | int | 持有数量 |\\n| 已装备 | bool | 是/否 |\\n| 所属人 | string | 物品的持有者姓名（主角/队友名），空则默认为公共物品 |\\n| 伤害 | string | 武器伤害骰，如 1d8+3 |\\n| 特性 | string | 物品特性及具体机制效果（如：轻型, +1AC, 每日1次施法）|\\n| 稀有度 | enum | [普通/非凡/稀有/极稀有/传说] |\\n| 描述 | text | 物品外观及背景故事（**禁止在此存放机制性规则**） |\\n| 重量 | float | 磅数，用于负重计算 |\\n| 价值 | string | 市场价值，如：50gp |","initNode":"【初始化】根据背景和职业添加初始装备","updateNode":"【触发条件】\\n- 获得物品时数量+1或新增条目\\n- 消耗物品时数量-1，归零则删除\\n- 装备/卸下时更新已装备状态\\n- **数据清洗**：若发现\'描述\'中包含具体的数值/规则效果，必须将其移动到\'特性\'字段，防止被剧情描述覆盖。","insertNode":"【触发条件】获得背包中没有的新物品","deleteNode":"【触发条件】物品数量归零、被摧毁或永久丢失"},"content":[[null,"物品ID","物品名称","类别","数量","已装备","所属人","伤害","特性","稀有度","描述","重量","价值"]],"updateConfig":{"batchSize":-1,"uiSentinel":-1},"exportConfig":{"enabled":false,"splitByRow":false,"entryName":"背包物品","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"🎒 背包-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991}},"orderNo":2},"sheet_QUEST_Active":{"uid":"sheet_QUEST_Active","name":"📜 任务","sourceData":{"note":"【任务追踪表】当前活跃的任务。\\n\\n| 列名 | 类型 | 说明 |\\n|------|------|------|\\n| 任务ID | pk | 主键，格式：QUEST_XXX |\\n| 任务名称 | string | 任务标题 |\\n| 类型 | enum | [主线/支线/个人] |\\n| 发布者 | string | NPC姓名或势力名 |\\n| 目标描述 | text | 任务目标和要求 |\\n| 当前进度 | text | 进度描述 |\\n| 状态 | enum | [进行中/已完成/已失败] |\\n| 时限 | string | 剩余时间或\\"无限制\\" |\\n| 奖励 | text | 预期奖励 |","initNode":"【初始化】根据剧情设定添加初始任务","updateNode":"【触发条件】\\n- 任务进展时更新进度\\n- 完成/失败时更新状态","insertNode":"【触发条件】接受新任务或触发新事件线","deleteNode":"【触发条件】任务完成或失败后可选择删除以保持简洁"},"content":[[null,"任务ID","任务名称","类型","发布者","目标描述","当前进度","状态","时限","奖励"]],"updateConfig":{"batchSize":-1,"uiSentinel":-1},"exportConfig":{"enabled":false,"splitByRow":false,"entryName":"任务列表","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"📜 任务-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991}},"orderNo":3},"sheet_FACTION_Standing":{"uid":"sheet_FACTION_Standing","name":"🏛️ 势力声望","sourceData":{"note":"【势力关系表】与各组织的关系状态。\\n\\n| 列名 | 类型 | 说明 |\\n|------|------|------|\\n| 势力ID | pk | 主键，格式：FACTION_XXX |\\n| 势力名称 | string | 组织/城邦/公会名 |\\n| 势力类型 | enum | [王国/公会/教团/商会/秘社/部落/军团/其他] |\\n| 势力领袖 | string | 势力的领导者或代表人物 |\\n| 势力宗旨 | text | 势力的核心理念、目标或使命 |\\n| 势力总部 | string | 势力的总部或主要据点所在地 |\\n| 势力描述 | text | 势力的背景介绍、历史和特色 |\\n| 关系等级 | enum | [-2敌对/-1不友善/0中立/+1友善/+2盟友] |\\n| 声望值 | int | 数值化声望，用于精细判定 |\\n| 主角头衔 | string | 在该势力中的地位（如：学徒、特工）|\\n| 关键事件 | text | 影响关系的重大事件记录 |\\n| 特权/通缉 | text | 获得的特权或被通缉状态 |","initNode":"【初始化】根据角色背景设置初始势力关系，填写势力基本信息（类型、领袖、宗旨、总部、描述）","updateNode":"【触发条件】\\n- 完成任务/冲突后调整关系和声望\\n- 获得头衔时更新\\n- 添加关键事件记录\\n- 势力领袖或总部变更时更新","insertNode":"【触发条件】首次与新势力产生实质性互动","deleteNode":"【触发条件】势力被毁灭或彻底离开该地区"},"content":[[null,"势力ID","势力名称","势力类型","势力领袖","势力宗旨","势力总部","势力描述","关系等级","声望值","主角头衔","关键事件","特权/通缉"]],"updateConfig":{"batchSize":-1,"uiSentinel":-1},"exportConfig":{"enabled":false,"splitByRow":false,"entryName":"势力关系","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"🏛️ 势力声望-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991}},"orderNo":4},"sheet_COMBAT_Encounter":{"uid":"sheet_COMBAT_Encounter","name":"⚔️ 战斗遭遇表","sourceData":{"note":"【战斗核心表】仅在战斗模式下激活，用于回合制战斗追踪。\\n\\n⚠️ 前端兼容说明：此表数据会被战术地图UI读取显示。\\n\\n| 列名 | 类型 | 前端读取 | 说明 |\\n|------|------|----------|------|\\n| 单位名称 | pk | ✅ | 唯一标识，必须与战斗地图表一致 |\\n| 阵营 | enum | ✅ | [友方/敌方/中立]，用于颜色标记 |\\n| 先攻/位置 | string | ✅ | 格式：先攻值/相对位置，如：18/近战 |\\n| HP状态 | string | ✅ | 格式：当前/最大 [状态]，如：25/30 [健康] |\\n| 防御/抗性 | string | ✅ | AC及特殊抗性，如：AC16 抗火 |\\n| 附着状态 | string | ✅ | Buff/Debuff列表，用分号分隔 |\\n| 是否为当前行动者 | enum | ✅ | [是/否]，高亮当前行动单位 |\\n| 回合资源 | string | ✅ | 如：动作1/1;附赠0/1;移动30/30尺 |","initNode":"【战斗开始时】\\n1. 全局状态表的战斗模式改为\\"战斗中\\"\\n2. 为所有参战单位投掷先攻\\n3. 按先攻降序排列所有行\\n4. 将先攻最高者的\\"是否为当前行动者\\"设为\\"是\\"\\n5. 填入每个单位的初始HP、AC","updateNode":"【每轮更新】\\n1. 攻击命中时扣除目标HP，更新状态标签\\n2. 单位行动后将其\\"是否为当前行动者\\"改为\\"否\\"\\n3. 下一个单位改为\\"是\\"\\n4. 移动时更新位置描述\\n5. 施加/移除状态效果","insertNode":"【触发条件】增援或召唤物加入战斗","deleteNode":"【战斗结束时】清空全表，全局状态的战斗模式改为\\"非战斗\\""},"content":[[null,"单位名称","阵营","先攻/位置","HP状态","防御/抗性","附着状态","是否为当前行动者","回合资源"]],"updateConfig":{"contextDepth":-1,"updateFrequency":1,"batchSize":3,"uiSentinel":-1,"groupId":3},"exportConfig":{"enabled":false,"splitByRow":false,"entryName":"战斗遭遇","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"⚔️ 战斗遭遇表-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991}},"orderNo":5},"sheet_COMBAT_BattleMap":{"uid":"sheet_COMBAT_BattleMap","name":"🗺️ 战斗地图","sourceData":{"note":"【战术地图数据表】存储战场的几何空间数据，供前端可视化渲染。\\n\\n⚠️ 前端兼容说明：严格遵守数据格式，否则地图无法渲染。\\n\\n| 列名 | 类型 | 格式要求 |\\n|------|------|----------|\\n| 单位名称 | pk | 必须与战斗遭遇表的单位名称完全一致 |\\n| 类型 | enum | [Config/Token/Wall/Terrain/Zone] |\\n| 坐标 | string | Config行：{\\"w\\":宽,\\"h\\":高}；其他行：{\\"x\\":列,\\"y\\":行} |\\n| 大小 | string | {\\"w\\":占格宽,\\"h\\":占格高}，默认{\\"w\\":1,\\"h\\":1} |\\n| Token | string | DiceBear图标，格式：风格:种子，如 adventurer:Hero |\\n\\n【类型说明】\\n- Config: 地图配置，必须有且仅有一行，坐标存地图尺寸\\n- Token: 可移动单位（PC、NPC、怪物）\\n- Wall: 不可穿越的障碍物\\n- Terrain: 困难地形、水域等\\n- Zone: 法术效果区域","initNode":"【战斗开始时】\\n1. 清空旧数据\\n2. 创建Map_Config行设定地图大小（默认20x20）\\n3. 根据场景描述创建Wall/Terrain\\n4. 为所有参战单位创建Token行\\n5. 分配不重叠的初始坐标","updateNode":"【移动时】更新对应单位的坐标\\n【环境变化时】添加/修改/删除Wall/Terrain/Zone","insertNode":"【触发条件】新单位加入战场或施放区域法术","deleteNode":"【战斗结束时】清空全表，删除所有记录，包括Map_Config行"},"content":[[null,"单位名称","类型","坐标","大小","Token"]],"updateConfig":{"contextDepth":-1,"updateFrequency":1,"batchSize":3,"uiSentinel":-1,"groupId":3},"exportConfig":{"enabled":false,"splitByRow":false,"entryName":"战斗地图","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"🗺️ 战斗地图-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991}},"orderNo":6},"sheet_LOG_Summary":{"uid":"sheet_LOG_Summary","name":"纪要表","sourceData":{"note":"轮次日志，每轮交互后必须立即插入一条新记录。\\n- 列0: 时间跨度 - 本轮事件发生的精确时间范围。\\n- 列1: 地点 - 本轮事件发生的地点，从大到小描述。\\n- 列2: 纪要 - 以第三方视角客观记录本轮事件，不得加入推测、情绪化语言、负面解读或主观判断。内容必须基于正文明确发生的事实，不得补充未出现的情节，不少于300字，结尾部分禁止进行总结或者升华。\\n- 列3: 概览 - 30字以内，一句话概括纪要内容。\\n- 列4: 编码索引 - 格式为 AMXX，XX从01递增。\\n","initNode":"故事初始化时，插入一条新记录用于记录初始化剧情。","deleteNode":"禁止删除。","updateNode":"禁止操作。","insertNode":"每轮交互结束后插入一条新记录。"},"content":[[null,"时间跨度","地点","纪要","概览","编码索引"]],"updateConfig":{"uiSentinel":-1,"contextDepth":-1,"updateFrequency":-1,"batchSize":-1,"skipFloors":-1},"exportConfig":{"enabled":true,"splitByRow":true,"entryName":"纪要","entryType":"keyword","keywords":"编码索引","preventRecursion":true,"injectionTemplate":"<记忆回溯>\\n$1\\n</记忆回溯>","extraIndexEnabled":true,"extraIndexEntryName":"纪要索引","extraIndexColumns":["概览","编码索引"],"extraIndexColumnModes":{"概览":"index_only","编码索引":"both"},"extraIndexInjectionTemplate":"<已发生的事件概览>\\n$1\\n</已发生的事件概览>","entryPlacement":{"position":"at_depth_as_system","depth":999,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":1000,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":9999,"order":99987},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":9999,"order":99988}},"orderNo":7},"sheet_UI_ActionOptions":{"uid":"sheet_UI_ActionOptions","name":"🎮 行动选项","sourceData":{"note":"【前端UI表】每轮为玩家生成可选的行动选项，此表有且仅有一行。\\n\\n⚠️ 前端兼容说明：前端会读取此表渲染为可点击按钮。\\n\\n| 列名 | 类型 | 说明 |\\n|------|------|------|\\n| 选项A | action | 符合逻辑的常规行动 |\\n| 选项B | action | 谨慎/防御性的行动 |\\n| 选项C | action | 大胆/冒险性的行动 |\\n| 选项D | action | 社交/非战斗行动 |","initNode":"【初始化】根据开局情境生成4个初始选项","updateNode":"【每轮必须更新】根据当前剧情和环境重新生成4个选项","insertNode":"【禁止】","deleteNode":"【禁止】"},"content":[[null,"选项A","选项B","选项C","选项D"]],"updateConfig":{"uiSentinel":-1,"contextDepth":-1,"updateFrequency":-1,"batchSize":-1,"skipFloors":-1},"exportConfig":{"enabled":false,"splitByRow":false,"entryName":"行动选项","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"🎮 行动选项-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991},"injectIntoWorldbook":false},"orderNo":8},"sheet_DICE_Pool":{"uid":"sheet_DICE_Pool","name":"🎲 骰子池","sourceData":{"note":"【预生成骰子池】存储真随机生成的骰子数值。前端会自动补充。使用时取第一行数据，使用对应列的数值，然后删除该行。\\n\\n| 列名 | 类型 | 说明 |\\n|------|------|------|\\n| ID | int | 骰子序号 |\\n| D4 | int | D4骰值 |\\n| D6 | int | D6骰值 |\\n| D8 | int | D8骰值 |\\n| D10 | int | D10骰值 |\\n| D12 | int | D12骰值 |\\n| D20 | int | D20骰值 |\\n| D100 | int | D100骰值 |","initNode":"【禁止】请勿手动初始化，由前端脚本自动管理。","updateNode":"【禁止】不可修改已生成的随机数","insertNode":"【禁止】由前端脚本自动管理补充","deleteNode":"【使用后删除】当一次检定需要随机数时，读取第一行对应骰面数值，然后删除该行。"},"content":[[null,"ID","D4","D6","D8","D10","D12","D20","D100"]],"updateConfig":{"batchSize":-1,"uiSentinel":-1},"exportConfig":{"enabled":false,"splitByRow":false,"entryName":"骰子池","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"🎲 骰子池-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991}},"orderNo":9},"sheet_EXPLORATION_Map_Data":{"uid":"sheet_EXPLORATION_Map_Data","name":"🗺️ 探索地图数据","sourceData":{"note":"【探索地图结构表】存储每个场景的地图结构数据（JSON格式）。\\n你是一个拥有建筑学学位的资深DND地牢架构师。请根据 LocationName（作为主题）及所属 IP 风格，设计一个紧凑、工整且富有环境叙事的地牢平面图。\\n\\n关键设计原则：\\n1. **网格吸附系统**：为了保证工整，所有房间的坐标(x,y)和尺寸(width,height) **必须是 25 或 50 的整数倍**。\\n2. **物理拓扑**：房间之间必须物理紧邻（间隙为0），形成闭环。严禁出现细长的无效缝隙。\\n3. **走廊实体化**：走廊(corridor)必须是拥有真实坐标(x,y,w,h)的长条形房间，绝不能是抽象连线。\\n4. **门与通道**：门必须精确计算坐标，位于两个房间的**共享边**上。\\n5. **IP沉浸式布局**：房间命名和形状应反映当前地点的历史背景（如：废弃实验室应有破碎的窗户和绿色毒雾颜色）。\\n\\n请生成一个至少包含 **8-12个区域**（房间+走廊）的复杂结构，确保有一个明确的入口和一个位于深处的Boss区域。\\n| 列名 | 类型 | 说明 |\\n|------|------|------|\\n| LocationName | pk | 场景名称（对应全局状态表的“当前场景”） |\\n| MapStructureJSON | text | 只有结构数据的JSON字符串（严格执行网格对齐） |\\n| LastUpdated | datetime | 最后生成时间 |\\n| 当前显示地图 | enum | [是/否]，强制显示该地图，忽略全局场景 |\\n\\n【JSON结构定义】MapStructureJSON 必须符合以下 Schema：\\n{\\n  \\"mapName\\": \\"地图名称 (e.g. 影牙城堡-下层)\\",\\n  \\"mapSize\\": { \\"width\\": 1000, \\"height\\": 800 },\\n  \\"rooms\\": [\\n    {\\n      \\"id\\": \\"room_1\\",\\n      \\"name\\": \\"入口大厅/仪式大厅/军械库\\",\\n      \\"type\\": \\"entrance/corridor/room/hall/secret_room/boss_arena/shop\\",\\n      \\"shape\\": \\"rectangular/L-shaped/cross/circular/cave_blob (人工建筑多用几何体，自然洞穴用 irregular)\\",\\n      \\"x\\": 100, \\"y\\": 100, \\"width\\": 200, \\"height\\": 150,\\n      \\"description\\": \\"详细的环境描写（光影、气味、声音）...\\",\\n      \\"color\\": \\"#hex (符合环境氛围的色调，如深红、幽蓝)\\"\\n    }\\n  ],\\n  \\"doors\\": [\\n    {\\n      \\"x\\": 300, \\"y\\": 175,\\n      \\"type\\": \\"open/door/secret_door/barred/magic_barrier\\",\\n      \\"orientation\\": \\"horizontal/vertical\\",\\n      \\"connects\\": [\\"room_1\\", \\"room_2\\"]\\n    }\\n  ],\\n  \\"features\\": [\\n    {\\n      \\"x\\": 150, \\"y\\": 150,\\n      \\"type\\": \\"column/statue/chest/trap/fountain/table/altar/terminal\\"\\n    }\\n  ]\\n}","initNode":"【初始化】如果游戏开始时主角已处于某个地牢/探索区域，应用下方【insertNode】的逻辑生成该区域的初始地图。","updateNode":"【触发条件】通常不更新结构。除非剧情导致地形发生巨大改变（如塌方、魔法重塑、发现新房间），此时重新执行生成逻辑。","insertNode":"【触发条件】当主角进入一个新的探索区域时触发。作为资深DND地牢架构师及Lore专家，请根据 LocationName（作为主题）设计一个紧凑、真实且富有叙事感的地牢平面图结构。\\n\\n## 核心思维流（CoT）：\\n1. **IP检索与风格分析**：首先分析 LocationName。如果它属于著名IP（如生化危机、黑暗之魂、DND模组、魔兽世界等）或特定历史风格，**立即调用内部知识库**检索其典型布局、房间命名习惯及环境氛围。\\n2. **功能区划**：不要随机堆砌。按照“入口缓冲区 -> 枢纽区 -> 功能分支 -> 核心/Boss区”的建筑逻辑规划。\\n3. **几何网格化**：想象一个虚拟网格。所有房间的坐标(x,y)和尺寸(w,h)必须是整数且尽量对齐，确保地图看起来工整、专业。\\n\\n## 关键设计原则：\\n1. **无缝模块化**：房间与房间之间必须物理“贴合”（坐标紧邻），形成一个闭环的建筑群，杜绝孤岛。\\n2. **走廊实体化**：Corridor（走廊）必须是具有真实坐标(x,y,w,h)的长条形房间实体，绝不能是抽象的连线。\\n3. **复杂的连通性**：避免单一直线流程。设计环路、捷径和分支，使得地图具有探索深度。\\n4. **IP化命名**：房间名称应贴合设定（例如：若是生化危机主题，使用“S.T.A.R.S.办公室”而非“房间A”；若是魔幻主题，使用“奥术凝视大厅”而非“大房间”）。\\n5. **不规则中的秩序**：虽然布局可以不对称，但边缘应整齐，避免出现无意义的细长缝隙。\\n\\n## 生成要求：\\n- **数量强制**：必须包含 **8-12 个** 独立的探索区域（房间+走廊）。\\n- **结构完整**：明确标记入口（Entrance）和深处的Boss区域/关键剧情点。\\n- **数据格式**：\\n  - 严格输出符合 Note 中定义的 JSON Schema。\\n  - 确保坐标数值精确，互不重叠但紧密相连。\\n  - 将完整的 JSON 字符串输出到 `MapStructureJSON` 字段。\\n  - 获取当前时间并填入 `LastUpdated`。\\n\\n现在，开始构建 [{{LocationName}}] 的地图数据：","deleteNode":"【触发条件】当主角彻底离开该区域且短期内不会返回时，可删除以节省空间。"},"content":[[null,"LocationName","MapStructureJSON","LastUpdated","当前显示地图"]],"updateConfig":{"batchSize":3,"uiSentinel":-1,"groupId":3},"exportConfig":{"enabled":false,"splitByRow":false,"entryName":"探索地图数据","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"🗺️ 探索地图数据-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991}},"orderNo":17},"sheet_COMBAT_Map_Visuals":{"uid":"sheet_COMBAT_Map_Visuals","name":"🖌️ 战斗地图绘制","sourceData":{"note":"【战斗地图视觉表】存储战斗场景的视觉结构数据，用于生成底图。与COMBAT_BattleMap配合，后者存逻辑(墙/怪)，此表存视觉(地面/装饰)。\\n\\n| 列名 | 类型 | 说明 |\\n|------|------|------|\\n| SceneName | pk | 场景名称，通常对应全局状态的“当前场景” |\\n| VisualJSON | text | 视觉结构数据(JSON)，包含地面材质、装饰物等 |\\n| GridSize | string | 网格尺寸，格式: 20x20 |\\n| LastUpdated | datetime | 最后更新时间 |\\n\\n【VisualJSON结构定义】\\n{\\n  \\"mapName\\": \\"场景名\\",\\n  \\"dimensions\\": { \\"width\\": 20, \\"height\\": 20 },\\n  \\"ground\\": \\"grass/stone/wood_plank/water/lava/snow...\\",\\n  \\"terrain_objects\\": [\\n    {\\n      \\"type\\": \\"tree/rock/wall/pillar/water_pool/furniture/rubble...\\",\\n      \\"x\\": 1, \\"y\\": 1, \\"w\\": 1, \\"h\\": 1,\\n      \\"rotation\\": 0,\\n      \\"description\\": \\"描述\\",\\n      \\"tactical\\": \\"cover/block/difficult\\"\\n    }\\n  ]\\n}","initNode":"【初始化】无需预填。","updateNode":"【触发条件】当战斗场景的环境发生重大视觉变化时更新。","insertNode":"【触发条件】当进入一场战斗，且该场景尚未在此表中存在记录时，根据正文剧情的环境描述生成视觉数据。\\n操作指南：\\n1. 提取剧情中的环境要素（如：酒馆地板是木质的，角落有翻倒的桌子）。\\n2. 生成符合JSON格式的VisualJSON。\\n3. GridSize 默认为 20x20，除非剧情暗示了极小或极大的空间。\\n4. 这是生成地图底图的关键依据。","deleteNode":"【触发条件】场景不再需要或地图数据过旧时删除。"},"content":[[null,"SceneName","VisualJSON","GridSize","LastUpdated"]],"updateConfig":{"batchSize":3,"uiSentinel":-1,"groupId":3},"exportConfig":{"enabled":false,"splitByRow":false,"entryName":"战斗绘制","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"🖌️ 战斗地图绘制-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991}},"orderNo":18},"sheet_CHARACTER_Registry":{"uid":"sheet_CHARACTER_Registry","name":"👤 角色表","sourceData":{"note":"【角色统一管理表】记录主角和队伍成员的基础信息。主角ID固定为PC_MAIN，队友ID格式为ALLY_XXX。\\n\\n| 列名 | 类型 | 说明 |\\n|------|------|------|\\n| CHAR_ID | pk | 主键，**主角固定为PC_MAIN**，队友为ALLY_XXX |\\n| 成员类型 | enum | [主角/同伴/宠物/召唤物/魔宠/随从] |\\n| 姓名 | string | 角色全名 |\\n| 种族/性别/年龄 | string | 基础信息 |\\n| 职业 | string | 职业及子职，如：圣武士(复仇誓言) Lv5 |\\n| 外貌描述 | text | 详细的外貌特征描写 |\\n| 性格特点 | text | 核心性格、理想、牵绊、缺陷 |\\n| 背景故事 | text | 角色背景，主角最多500字，队友最多300字 |\\n| 加入时间 | datetime | 主角为游戏开始时间，队友为加入队伍时间 |","initNode":"【初始化】\\n1. 必须创建主角行，CHAR_ID=PC_MAIN，成员类型=主角\\n2. 根据用户提供的角色信息填写主角数据\\n3. 根据剧情设定填写初始队友信息","updateNode":"【触发条件】\\n- 职业升级时更新职业列\\n- 经历重大事件后追加背景故事（主角控制在500字内，队友300字内）\\n- 外貌变化时更新描述","insertNode":"【严格限制】\\n- 主角行：禁止插入，初始化时已创建\\n- 队友：只有在NPC明确表达加入意愿，并且被玩家明确接受后，方可添加","deleteNode":"【触发条件】\\n- 主角行：禁止删除\\n- 队友：永久离队、死亡或背叛时删除"},"content":[[null,"CHAR_ID","成员类型","姓名","种族/性别/年龄","职业","外貌描述","性格特点","背景故事","加入时间"]],"updateConfig":{"batchSize":1,"uiSentinel":-1,"groupId":1},"exportConfig":{"enabled":true,"splitByRow":true,"entryName":"角色信息","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"👤 角色表-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991}},"orderNo":14},"sheet_CHARACTER_Attributes":{"uid":"sheet_CHARACTER_Attributes","name":"📊 角色属性","sourceData":{"note":"【角色属性表】记录所有角色的完整战斗数据。每个角色一行，通过CHAR_ID关联。\\n\\n| 列名 | 类型 | 格式示例 |\\n|------|------|------|\\n| CHAR_ID | fk | 外键，关联角色表(PC_MAIN或ALLY_XXX) |\\n| 等级 | int | 总等级数字 |\\n| HP | ratio | 当前/最大，如：45/52 |\\n| AC | int | 护甲等级数值 |\\n| 先攻加值 | int | 敏捷调整值+其他加值 |\\n| 速度 | string | 如：30尺(6格) |\\n| 属性值 | string | {\\"STR\\":16,\\"DEX\\":14,\\"CON\\":14,\\"INT\\":10,\\"WIS\\":12,\\"CHA\\":8} |\\n| 豁免熟练 | string | 如：[\\"力量\\",\\"体质\\"] |\\n| 技能熟练 | string | 如：[\\"运动\\",\\"威吓\\",\\"宗教\\"] |\\n| 被动感知 | int | 10+感知调整值+熟练(若有) |\\n| 经验值 | ratio | 当前/下级所需，如：6500/14000|","initNode":"【初始化】\\n1. 必须创建主角属性行，CHAR_ID=PC_MAIN\\n2. 根据职业和等级按DND 5E规则计算所有数值\\n3. 队友加入时同步添加属性行","updateNode":"【触发条件】\\n- 受伤/治疗时更新HP\\n- 升级时重算所有数值\\n- 装备变化时重算AC\\n- **主动经验结算（最高优先级）**：作为GM，你必须时刻监控剧情正文。一旦检测到战斗胜利、敌人倒下、谜题解开或任务达成，**必须在当前轮次**立即结算并增加经验值(XP)。不要等待玩家指令，不要依赖其他表格的状态。直接根据表现给予奖励（如：杂兵+50，精英+200，Boss+1000）。","insertNode":"【触发条件】新角色加入时，同步添加属性行","deleteNode":"【触发条件】\\n- 主角行：禁止删除\\n- 队友：离队时同步删除"},"content":[[null,"CHAR_ID","等级","HP","AC","先攻加值","速度","属性值","豁免熟练","技能熟练","被动感知","经验值"]],"updateConfig":{"batchSize":1,"uiSentinel":-1,"groupId":1},"exportConfig":{"enabled":true,"splitByRow":false,"entryName":"角色属性","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"📊 角色属性-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991}},"orderNo":15},"sheet_CHARACTER_Resources":{"uid":"sheet_CHARACTER_Resources","name":"⚡ 角色资源","sourceData":{"note":"【角色资源表】记录所有角色的可消耗资源。每个角色一行，通过CHAR_ID关联。\\n\\n| 列名 | 类型 | 格式示例 |\\n|------|------|------|\\n| CHAR_ID | fk | 外键，关联角色表(PC_MAIN或ALLY_XXX) |\\n| 法术位 | string | {\\"1级\\":\\"3/4\\",\\"2级\\":\\"2/3\\",\\"3级\\":\\"0/2\\"} |\\n| 职业资源 | string | 如战士：{\\"动作如潮\\":\\"0/1\\",\\"再战\\":\\"1/1\\"} |\\n| 生命骰 | ratio | 短休可用，如：3/5 |\\n| 特殊能力 | string | 种族/专长能力次数 |\\n| 金币 | int | 当前持有金币数 |","initNode":"【初始化】\\n1. 必须创建主角资源行，CHAR_ID=PC_MAIN\\n2. 根据职业等级设置初始资源池\\n3. 队友加入时同步添加资源行","updateNode":"【触发条件】\\n- 使用法术/能力后扣除\\n- 短休后恢复生命骰和部分职业资源\\n- 长休后完全恢复\\n- 金币变动时更新","insertNode":"【触发条件】新角色加入时，同步添加资源行","deleteNode":"【触发条件】\\n- 主角行：禁止删除\\n- 队友：离队时同步删除"},"content":[[null,"CHAR_ID","法术位","职业资源","生命骰","特殊能力","金币"]],"updateConfig":{"batchSize":1,"uiSentinel":-1,"groupId":1},"exportConfig":{"enabled":false,"splitByRow":false,"entryName":"角色资源","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"⚡ 角色资源-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991}},"orderNo":16},"sheet_SKILL_Library":{"uid":"sheet_SKILL_Library","name":"📚 技能/法术库","sourceData":{"note":"【共享技能库】存储所有技能和法术的详细信息。角色通过关联表引用此库中的技能。\\n\\n| 列名 | 类型 | 说明 |\\n|------|------|------|\\n| SKILL_ID | pk | 主键，格式：SKL_XXX |\\n| 技能名称 | string | 技能/法术名 |\\n| 技能类型 | enum | [法术/武技/特技/天赋/种族能力/职业能力] |\\n| 环阶 | string | 法术环阶(0=戏法)或技能等级 |\\n| 学派 | string | 法术学派或武技流派 |\\n| 施法时间 | string | 如：1动作、1附赠动作、1分钟 |\\n| 射程 | string | 如：自身、接触、120尺 |\\n| 成分 | string | V/S/M(材料)或能力消耗 |\\n| 持续时间 | string | 如：立即、专注1分钟、8小时 |\\n| 效果描述 | text | **完整规则文本**。优先摘录正文中的详细描述（含自制规则）。仅在正文缺失细节时调用DND规则库。禁止概括或简化。 |\\n| 升阶效果 | text | 高环施放的额外效果(法术专用) |","initNode":"【初始化】根据角色职业预填常用技能/法术，必须调用规则库填入完整描述，包含以下所有类型：\\n\\n1. **基础攻击动作**（所有职业必填）：\\n   - 为角色装备的每种武器创建攻击技能（如：长剑斩击、短弓射击）\\n   - 徒手攻击（所有角色默认拥有）\\n   - 技能类型=武技，环阶=基础\\n   \\n2. **通用战斗动作**（所有职业必填）：\\n   - 攻击(Attack)、疾走(Dash)、撤离(Disengage)、躲藏(Hide)、\\n   - 帮助(Help)、准备(Ready)、搜索(Search)、使用物品(Use Object)\\n   - 技能类型=特技，环阶=基础\\n   \\n3. **职业战斗技能**（按职业添加）：\\n   - 战士：二次攻击、动作如潮、再战\\n   - 武僧：疾风连击、气弹投射、震山靠、百裂拳\\n   - 野蛮人：狂暴攻击、鲁莽攻击\\n   - 游荡者：偷袭、狡诈动作\\n   \\n4. **法术**（施法职业添加）：\\n   - 戏法和已知/已准备法术","updateNode":"【禁止】技能库内容通常不修改，如需修改请谨慎","insertNode":"【触发条件】正文提及或角色获得新技能/法术时必须立即添加。\\n**完整性要求**：\\n1. **原文优先**：如果正文包含了技能的具体效果、伤害骰或特殊规则（可能是自制/魔改技能），**必须原样摘录正文的完整描述**，严禁使用标准规则覆盖，也严禁摘要。\\n2. **查漏补缺**：仅当正文只提到技能名且无细节（如“释放了火球术”）时，才调用DND5e规则库补全标准描述。\\n3. 长文本必须保留所有细节条款。","deleteNode":"【触发条件】确认技能不再使用且无角色关联时可删除"},"content":[[null,"SKILL_ID","技能名称","技能类型","环阶","学派","施法时间","射程","成分","持续时间","效果描述","升阶效果"]],"updateConfig":{"batchSize":1,"uiSentinel":-1,"groupId":1},"exportConfig":{"enabled":false,"splitByRow":false,"entryName":"技能库","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"📚 技能/法术库-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991}},"orderNo":10},"sheet_CHARACTER_Skills":{"uid":"sheet_CHARACTER_Skills","name":"🔗 角色技能关联","sourceData":{"note":"【角色技能关联表】建立角色与技能的多对多关系。一个角色可拥有多个技能，一个技能可被多人拥有。\\n\\n| 列名 | 类型 | 说明 |\\n|------|------|------|\\n| LINK_ID | pk | 主键，格式：SLINK_XXX |\\n| CHAR_ID | fk | 角色ID (PC_MAIN 或 ALLY_XXX) |\\n| SKILL_ID | fk | 技能ID (关联技能库) |\\n| 获取方式 | string | 职业/种族/专长/道具/卷轴 |\\n| 已准备 | bool | 是否已准备(法术类)，戏法永远为是 |\\n| 熟练度 | enum | [生疏/熟练/精通] |\\n| 备注 | text | 特殊说明(如：限制条件) |","initNode":"【初始化】根据角色职业和等级建立初始技能关联","updateNode":"【触发条件】长休后更新已准备状态，熟练度提升时更新","insertNode":"【触发条件】角色学习新技能时添加关联","deleteNode":"【触发条件】永久失去技能时删除关联（极少见）"},"content":[[null,"LINK_ID","CHAR_ID","SKILL_ID","获取方式","已准备","熟练度","备注"]],"updateConfig":{"batchSize":1,"uiSentinel":-1,"groupId":1},"exportConfig":{"enabled":false,"splitByRow":false,"entryName":"角色技能","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"🔗 角色技能关联-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991}},"orderNo":11},"sheet_FEAT_Library":{"uid":"sheet_FEAT_Library","name":"🏅 专长库","sourceData":{"note":"【共享专长库】存储所有专长的详细信息。角色通过关联表引用此库中的专长。\\n\\n| 列名 | 类型 | 说明 |\\n|------|------|------|\\n| FEAT_ID | pk | 主键，格式：FEAT_XXX |\\n| 专长名称 | string | 专长名 |\\n| 类别 | enum | [通用/战斗/法术/技巧/种族] |\\n| 前置条件 | string | 获取前置要求（如：力量13+，施法能力）|\\n| 效果描述 | text | 专长的完整效果说明 |\\n| 属性提升 | string | 是否含属性提升（如：+1力量）|\\n| 附带能力ID | string | 专长附带的技能ID列表(关联技能库) |","initNode":"【初始化】根据角色专长预填常用专长","updateNode":"【禁止】专长库内容通常不修改","insertNode":"【触发条件】遇到新专长时添加到库中","deleteNode":"【触发条件】确认专长不再使用且无角色关联时可删除"},"content":[[null,"FEAT_ID","专长名称","类别","前置条件","效果描述","属性提升","附带能力ID"]],"updateConfig":{"batchSize":1,"uiSentinel":-1,"groupId":1},"exportConfig":{"enabled":false,"splitByRow":false,"entryName":"专长库","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"🏅 专长库-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991}},"orderNo":12},"sheet_CHARACTER_Feats":{"uid":"sheet_CHARACTER_Feats","name":"🔗 角色专长关联","sourceData":{"note":"【角色专长关联表】建立角色与专长的多对多关系。\\n\\n| 列名 | 类型 | 说明 |\\n|------|------|------|\\n| LINK_ID | pk | 主键，格式：FLINK_XXX |\\n| CHAR_ID | fk | 角色ID (PC_MAIN 或 ALLY_XXX) |\\n| FEAT_ID | fk | 专长ID (关联专长库) |\\n| 获取来源 | string | 等级/种族/职业/奖励/背景 |\\n| 获取等级 | int | 获得此专长时的角色等级 |\\n| 已选择项 | string | 专长需选择时的具体选项(如：选择的语言) |\\n| 备注 | text | 特殊说明 |","initNode":"【初始化】根据角色背景和等级建立初始专长关联","updateNode":"【触发条件】专长效果变化时更新备注","insertNode":"【触发条件】角色获得新专长时添加关联(4/8/12/16/19级或人类变体)","deleteNode":"【禁止】已获得的专长通常不会失去"},"content":[[null,"LINK_ID","CHAR_ID","FEAT_ID","获取来源","获取等级","已选择项","备注"]],"updateConfig":{"batchSize":1,"uiSentinel":-1,"groupId":1},"exportConfig":{"enabled":false,"splitByRow":false,"entryName":"角色专长","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"🔗 角色专长关联-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991}},"orderNo":13}}');
+;// ./dist/DND5E_SQL_9.20.json
+const DND5E_SQL_9_20_namespaceObject = /*#__PURE__*/JSON.parse('{"mate":{"type":"chatSheets","version":2,"globalInjectionConfig":{"readableEntryPlacement":{"position":"before_character_definition","depth":2,"order":99981},"wrapperPlacement":{"position":"before_character_definition","depth":2,"order":99980}},"updateConfigUiSentinel":-1},"sheet_quanjuzhuangtai":{"uid":"sheet_quanjuzhuangtai","name":"🌍 全局状态","sourceData":{"note":"-- 【系统核心单例表】卡兰德大陆全局环境、时间轴与战斗状态机。全表仅允许存在 1 行(row_id=1)。\\nCREATE TABLE sheet_quanjuzhuangtai (\\n    row_id INTEGER PRIMARY KEY CHECK (row_id = 1), -- 行号: 单例主键锁定为1\\n    dang_qian_chang_jing TEXT NOT NULL, -- 当前场景: 主角当前所在的具体场景名称，区域与地名(如 \'诺斯特拉大陆-诺斯加德-霜叶之森-外围雪杉林\')\\n    chang_jing_miao_shu TEXT NOT NULL, -- 场景描述: 光线/气温/危险度/DND感知DC(如 \'昏暗微光,暴风雪,感知DC 12\')\\n    you_xi_shi_jian TEXT NOT NULL, -- 游戏时间: 格式\'YYYY-MM-DD HH:MM\',严禁模糊词(如 \'488-8-15 08:30\')\\n    shang_lun_shi_jian TEXT NOT NULL, -- 上轮时间: 格式\'YYYY-MM-DD HH:MM\'(如 \'488-8-15 09:30\')\\n    liu_shi_shi_chang TEXT NOT NULL, -- 流逝时长: 本轮动作耗时(如 \'2小时30分钟\')\\n    tian_qi_zhuang_kuang TEXT NOT NULL, -- 天气状况: 气象及DND减益/增益(如 \'暴风雪(远程攻击劣势)\')\\n    zhan_dou_mo_shi TEXT NOT NULL CHECK (zhan_dou_mo_shi IN (\'非战斗\',\'战斗中\',\'战斗结束\')), -- 战斗模式\\n    dang_qian_hui_he INTEGER NOT NULL DEFAULT 0, -- 当前回合: 战斗轮计数,非战斗固定为0\\n    xi_tong_tong_zhi TEXT -- 系统通知: 广播事件/昼夜交替/休整结算(如 \'短休结算完成,恢复12点HP\')\\n);","initNode":"/* 【初始化触发规则】开局单次执行。必须根据玩家第一条消息/开局第一幕(First Message)的实际设定动态提取并填入，严禁死板套用示例！时间必须精确到分钟 */\\nINSERT INTO sheet_quanjuzhuangtai (\\n    row_id, dang_qian_chang_jing, chang_jing_miao_shu, you_xi_shi_jian,\\n    shang_lun_shi_jian, liu_shi_shi_chang, tian_qi_zhuang_kuang,\\n    zhan_dou_mo_shi, dang_qian_hui_he, xi_tong_tong_zhi\\n) VALUES (\\n    1,\\n    \'{根据开局剧情提取: 当前具体场景名称，如\\"王都酒馆/地牢/某森林\\"}\',\\n    \'{根据开局剧情提取: 当前环境光线、氛围、温湿度及DND感知DC}\',\\n    \'{根据开局剧情提取或推算的精确时间: YYYY-MM-DD HH:MM}\',\\n    \'{与上一列游戏时间保持一致: YYYY-MM-DD HH:MM}\',\\n    \'0分钟(开局)\',\\n    \'{根据开局剧情提取: 当前天气及对行动的影响}\',\\n    \'非战斗\',\\n    0,\\n    \'系统初始化完成，世界线启动。\'\\n);","insertNode":"/* 严格禁止新增：此表为单例全局状态表，锁定且仅允许 row_id = 1 存在 */","updateNode":"/* 【每轮必须更新】\\n 1. 将原 you_xi_shi_jian 赋给 shang_lun_shi_jian；根据耗时推进 you_xi_shi_jian 并填写 liu_shi_shi_chang。\\n 2. 战斗中 dang_qian_hui_he 递增+1，退出战斗置为 0。场景移动同步刷新场景列。 */\\nUPDATE sheet_quanjuzhuangtai \\nSET \\n    shang_lun_shi_jian = you_xi_shi_jian,\\n    you_xi_shi_jian = \'{精确时间: YYYY-MM-DD HH:MM}\',\\n    liu_shi_shi_chang = \'{本轮耗时: 如 \\"10分钟\\"}\',\\n    dang_qian_chang_jing = \'{当前场景名称}\',\\n    chang_jing_miao_shu = \'{场景环境描述}\',\\n    tian_qi_zhuang_kuang = \'{当前天气与环境检定影响}\',\\n    zhan_dou_mo_shi = \'{非战斗 | 战斗中 | 战斗结束}\',\\n    dang_qian_hui_he = CASE \\n        WHEN \'{zhan_dou_mo_shi}\' = \'战斗中\' THEN dang_qian_hui_he + 1 \\n        ELSE 0 \\n    END,\\n    xi_tong_tong_zhi = \'{系统广播/结算通知}\'\\nWHERE row_id = 1;","deleteNode":"/* 严格禁止删除：全局状态表为系统核心基石，物理删除将导致系统崩溃 */","ddl":"CREATE TABLE sheet_quanjuzhuangtai (\\n  row_id INTEGER PRIMARY KEY,\\n  dang_qian_chang_jing TEXT, -- 当前场景\\n  chang_jing_miao_shu TEXT, -- 场景描述\\n  you_xi_shi_jian TEXT, -- 游戏时间\\n  shang_lun_shi_jian TEXT, -- 上轮时间\\n  liu_shi_shi_chang TEXT, -- 流逝时长\\n  tian_qi_zhuang_kuang TEXT, -- 天气状况\\n  zhan_dou_mo_shi TEXT, -- 战斗模式\\n  dang_qian_hui_he INTEGER, -- 当前回合\\n  xi_tong_tong_zhi TEXT -- 系统通知\\n);"},"content":[["row_id","当前场景","场景描述","游戏时间","上轮时间","流逝时长","天气状况","战斗模式","当前回合","系统通知"]],"updateConfig":{"batchSize":-1,"uiSentinel":-1,"groupId":2},"exportConfig":{"enabled":false,"splitByRow":false,"entryName":"全局状态","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"🌍 全局状态-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","sqlInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991}},"orderNo":0},"sheet_npczhucebiao":{"uid":"sheet_npczhucebiao","name":"👥 NPC注册表","sourceData":{"note":"-- 【NPC统一管理表】所有重要NPC/同伴/敌对头目唯一数据源，通过 npc_id 关联其他子表。\\nCREATE TABLE sheet_npczhucebiao (\\n    row_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 行号: 自增物理主键\\n    npc_id TEXT NOT NULL UNIQUE, -- NPC编号: 业务唯一键,格式\'NPC_XXX\'(如 \'NPC_001\')\\n    xing_ming TEXT NOT NULL, -- 姓名: NPC全名,死亡时末尾必须追加†符号(如 \'银霜\', 死亡后变为 \'银霜†\')\\n    zhong_zu_xing_bie_nian_ling TEXT NOT NULL, -- 基础信息: 种族/性别/年龄(如 \'狼裔-兽亲/雄/19\'、\'佩洛-犬裔/雌/35\'、\'菲林-狮裔/雄/22\')\\n    zhi_ye_shen_fen TEXT NOT NULL, -- 职业身份: 社会身份或职业(如 \'守林人\'、\'法师\'、\'教师\')\\n    wai_mao_miao_shu TEXT, -- 外貌描述: 客观特征(如 \'银白狼耳与毛茸长尾,身披轻便皮甲,眼神警惕\')\\n    deng_ji TEXT NOT NULL, -- 等级: DND等级\\n    hp TEXT NOT NULL, -- 生命值: DND生命值,格式\'当前HP/最大HP\'(如 \'45/52\')\\n    ac INTEGER NOT NULL, -- 护甲等级: DND5E的AC护甲值,纯整数(如 14)\\n    zhu_yao_ji_neng TEXT, -- 主要技能: 特技/法术/招式,逗号分隔(如 \'二次攻击,野性感知,猎人印记\')\\n    sui_shen_wu_pin TEXT, -- 随身物品: 随身装备与道具,逗号分隔(如 \'精制猎弓,短剑x2,治疗药水x1\')\\n    dang_qian_zhuang_tai TEXT NOT NULL CHECK (dang_qian_zhuang_tai IN (\'在场\',\'离场\',\'死亡\',\'失踪\')), -- 当前状态\\n    suo_zai_wei_zhi TEXT NOT NULL, -- 所在位置: NPC当前所处场景名称(如 \'诺斯加德-霜叶之森-隐蔽雪穴\')\\n    guan_jian_jing_li TEXT -- 关键经历: 影响剧情与关系的重要历史事件记录\\n);","initNode":"/* 【初始化触发规则】开局单次执行。为开局第一幕已登场的重要NPC/初始同伴创建初始档案；提取实际剧情信息填入动态占位符，严禁漏填初始战斗数值 */\\nINSERT INTO sheet_npczhucebiao (\\n    npc_id, xing_ming, zhong_zu_xing_bie_nian_ling, zhi_ye_shen_fen,\\n    wai_mao_miao_shu, deng_ji, hp, ac,\\n    zhu_yao_ji_neng, sui_shen_wu_pin, dang_qian_zhuang_tai,\\n    suo_zai_wei_zhi,\\n    guan_jian_jing_li\\n) VALUES (\\n    \'NPC_001\',\\n    \'{开局登场NPC全名}\',\\n    \'{种族/性别/年龄，如: 黎博利-鸮裔/雌/22}\',\\n    \'{职业/身份，如: 游侠/佣兵}\',\\n    \'{外貌体貌特征与穿戴描述}\',\\n    \'{等级，如: 3}\',\\n    \'{初始HP格式: 当前HP/最大HP，如: 28/28}\',\\n    13, -- {初始AC整数值}\\n    \'{常用技能/能力/招式，逗号分隔}\',\\n    \'{随身携带物品/武器/药水，逗号分隔}\',\\n    \'在场\',\\n    \'{当前所在场景名称}\',\\n    \'{初次登场或产生交集的关键经历}\');","updateNode":"/* 【更新触发规则】满足以下任意条件时按 npc_id 精确更新：\\n 1. 状态/位置变动：更新 dang_qian_zhuang_tai 与 suo_zai_wei_zhi。\\n 2. 战斗结算：受伤/治疗更新 hp；获取/消耗道具更新 sui_shen_wu_pin。\\n 3. 死亡【铁律】：HP降至0或剧情死亡时，dang_qian_zhuang_tai 改为 \'死亡\'，xing_ming 尾部强制追加 \'†\'（如 \'艾莲\' -> \'艾莲†\'）。 */\\nUPDATE sheet_npczhucebiao \\nSET \\n    xing_ming = \'{死亡时追加†符号，未死则保持原名}\',\\n    zhi_ye_shen_fen = \'{身份变化时更新，否则保持原值}\',\\n    wai_mao_miao_shu = \'{外貌或受创伤残变化时更新}\',\\n    deng_ji = \'{等级提升时更新}\',\\n    hp = \'{更新当前HP/最大HP，如: 18/52}\',\\n    ac = {AC数值},\\n    zhu_yao_ji_neng = \'{技能列表更新}\',\\n    sui_shen_wu_pin = \'{随身物品清单更新}\',\\n    dang_qian_zhuang_tai = \'{在场 | 离场 | 死亡 | 失踪}\',\\n    suo_zai_wei_zhi = \'{最新场景位置}\',\\n    guan_jian_jing_li = \'{追加最新关键经历}\'\\nWHERE npc_id = \'{目标NPC编号，如 NPC_001}\';","insertNode":"/* 【新增触发规则】当剧情中有新的重要NPC/关键角色登场时执行。npc_id 严格按 \'NPC_002\', \'NPC_003\' 递增分配 */\\nINSERT INTO sheet_npczhucebiao (\\n    npc_id, xing_ming, zhong_zu_xing_bie_nian_ling, zhi_ye_shen_fen,\\n    wai_mao_miao_shu, deng_ji, hp, ac,\\n    zhu_yao_ji_neng, sui_shen_wu_pin, dang_qian_zhuang_tai,\\n    suo_zai_wei_zhi,\\n    guan_jian_jing_li\\n) VALUES (\\n    \'{新NPC编号: 递增如 NPC_002}\',\\n    \'{新NPC全名}\',\\n    \'{种族/性别/年龄}\',\\n    \'{职业或社会身份}\',\\n    \'{外貌及装备细节描写}\',\\n    \'{等级}\',\\n    \'{当前HP/最大HP}\',\\n    12, -- {AC护甲值}\\n    \'{核心技能或法术}\',\\n    \'{随身装备与道具清单}\',\\n    \'在场\',\\n    \'{登场所在的场景名称}\',\\n    \'{初次登场的关键事件/印象}\'\\n);","deleteNode":"/* 严格禁止物理删除：NPC数据终身保留以供历史回溯。NPC死亡、离场或失踪一律通过 updateNode 修改 dang_qian_zhuang_tai 并在死亡时追加 † 符号进行逻辑归档 */","ddl":"CREATE TABLE sheet_npczhucebiao (\\n  row_id INTEGER PRIMARY KEY,\\n  npc_id TEXT,\\n  xing_ming TEXT, -- 姓名\\n  zhong_zu_xing_bie_nian_ling TEXT, -- 种族/性别/年龄\\n  zhi_ye_shen_fen TEXT, -- 职业/身份\\n  wai_mao_miao_shu TEXT, -- 外貌描述\\n  deng_ji TEXT, -- 等级\\n  hp TEXT, -- HP\\n  ac TEXT, -- AC\\n  zhu_yao_ji_neng TEXT, -- 主要技能\\n  sui_shen_wu_pin TEXT, -- 随身物品\\n  dang_qian_zhuang_tai TEXT, -- 当前状态\\n  suo_zai_wei_zhi TEXT, -- 所在位置\\n  guan_jian_jing_li TEXT -- 关键经历\\n);"},"content":[["row_id","npc_id","姓名","种族/性别/年龄","职业/身份","外貌描述","等级","HP","AC","主要技能","随身物品","当前状态","所在位置","关键经历"]],"updateConfig":{"batchSize":-1,"uiSentinel":-1,"groupId":2,"updateFrequency":-1},"exportConfig":{"enabled":false,"splitByRow":true,"entryName":"NPC信息","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"👥 NPC注册表-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","sqlInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991}},"orderNo":1},"sheet_beibao":{"uid":"sheet_beibao","name":"🎒 背包","sourceData":{"note":"-- 【物品管理表】记录队伍全员持有的装备、消耗品与杂物，通过 suo_shu_ren 标识归属。\\nCREATE TABLE sheet_beibao (\\n    row_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 行号: 自增物理主键\\n    item_id TEXT NOT NULL UNIQUE, -- 物品编号: 格式\'ITEM_XXX\'(如 \'ITEM_01\')\\n    wu_pin_ming_cheng TEXT NOT NULL, -- 物品名称: 物品全名(如 \'精制钢质长剑\'、\'微光治疗药水\')\\n    lei_bie TEXT NOT NULL CHECK (lei_bie IN (\'武器\',\'护甲\',\'消耗品\',\'工具\',\'杂物\',\'魔法物品\',\'任务专属物品\')), -- 类别\\n    shu_liang INTEGER NOT NULL DEFAULT 1, -- 数量: 持有数量,纯整数(如 1, 5)\\n    yi_zhuang_bei TEXT NOT NULL DEFAULT \'否\' CHECK (yi_zhuang_bei IN (\'是\',\'否\')), -- 已装备: 是否佩戴生效\\n    suo_shu_ren TEXT NOT NULL DEFAULT \'队伍公共\', -- 所属人: 持有者角色名或\'队伍公共\'(如 \'利姆鲁\'/\'银霜\'/\'队伍公共\')\\n    te_xing TEXT, -- 特性: 伤害骰/护甲加值/词条/机制效果(如 \'1d8挥砍,轻型\' / \'+1AC\' / \'饮用恢复2d4+2 HP\')\\n    xi_you_du TEXT NOT NULL DEFAULT \'普通\' CHECK (xi_you_du IN (\'普通\',\'优良\',\'稀有\',\'史诗\',\'传说\',\'神话\')), -- 稀有度\\n    miao_shu TEXT, -- 描述: 仅限外观与背景叙事,严禁存放数值规则(如 \'剑柄刻有微光纹路的轻钢长剑,触感冰凉\')\\n    jia_zhi TEXT -- 价值: 市场参考价值(如 \'15 G\')\\n);","initNode":"/* 【初始化触发规则】开局单次执行。根据主角及初始同伴的初始职业与背景设定，分别插入初始携带的装备与道具 */\\nINSERT INTO sheet_beibao (\\n    item_id, wu_pin_ming_cheng, lei_bie, shu_liang,\\n    yi_zhuang_bei, suo_shu_ren, te_xing, xi_you_du, miao_shu, jia_zhi\\n) VALUES \\n(\\n    \'ITEM_01\',\\n    \'{初始主武器/核心装备名}\',\\n    \'武器\',\\n    1,\\n    \'是\',\\n    \'{主角名}\',\\n    \'{伤害骰与词条，如: 1d8+2 挥砍, 灵巧}\',\\n    \'普通\',\\n    \'{装备外观与工艺叙事描写}\',\\n    \'15 G\'\\n),\\n(\\n    \'ITEM_02\',\\n    \'{初始防具/随身道具名}\',\\n    \'消耗品\',\\n    2,\\n    \'否\',\\n    \'{主角名或同伴名}\',\\n    \'{机制效果，如: 动作消耗, 恢复2d4+2点HP}\',\\n    \'普通\',\\n    \'{药水瓶或道具外观叙事描写}\',\\n    \'50 G\'\\n);","updateNode":"/* 【更新触发规则】满足以下任意条件时按 item_id 更新：\\n 1. 数量增减：获取已有物品时 shu_liang 增加；消耗或丢弃部分时 shu_liang 减少。\\n 2. 装备穿脱：穿戴/装备置为 \'是\'，卸下置为 \'否\'。\\n 3. 物品转交：变更 suo_shu_ren。\\n 4. 【数据清洗铁律】：若发现 miao_shu 中混入了数值、伤害骰或规则判定，必须将其剥离并迁移至 te_xing 字段，保持 miao_shu 为纯叙事描述。 */\\nUPDATE sheet_beibao \\nSET \\n    shu_liang = {更新后的最新数量},\\n    yi_zhuang_bei = \'{是 | 否}\',\\n    suo_shu_ren = \'{持有者角色名或 队伍公共}\',\\n    te_xing = \'{规范后的DND数值机制与特性效果}\',\\n    xi_you_du = \'{稀有度变更时更新，否则保持原值}\',\\n    miao_shu = \'{纯外观背景叙事描写}\',\\n    jia_zhi = \'{最新市场估值}\'\\nWHERE item_id = \'{目标物品编号，如 ITEM_01}\';","insertNode":"/* 【新增触发规则】当搜刮、购买、任务奖励或拾取到背包中【完全不存在的新物品】时执行。item_id 按 \'ITEM_03\', \'ITEM_04\' 递增分配 */\\nINSERT INTO sheet_beibao (\\n    item_id, wu_pin_ming_cheng, lei_bie, shu_liang,\\n    yi_zhuang_bei, suo_shu_ren, te_xing, xi_you_du, miao_shu, jia_zhi\\n) VALUES (\\n    \'{递增编号: 如 ITEM_03}\',\\n    \'{新物品名称}\',\\n    \'{武器 | 护甲 | 消耗品 | 工具 | 杂物 | 魔法物品 | 任务专属物品}\',\\n    {获得数量: 纯整数},\\n    \'否\',\\n    \'{获得者角色名或 队伍公共}\',\\n    \'{数值/伤害骰/检定加值/具体机制效果}\',\\n    \'{普通 | 优良 | 稀有 | 史诗 | 传说 | 神话}\',\\n    \'{纯叙事外观与背景，严禁存放机制规则}\',\\n    \'{市场价格: 如 20 G}\'\\n);","deleteNode":"/* 【删除触发规则】当物品数量归零（全部消耗/赠送/卖出）、被完全摧毁或永久丢失时执行物理删除 */\\nDELETE FROM sheet_beibao \\nWHERE item_id = \'{归零或损毁物品编号，如 ITEM_02}\' \\n   OR shu_liang <= 0;","ddl":"CREATE TABLE sheet_beibao (\\n  row_id INTEGER PRIMARY KEY,\\n  item_id TEXT,\\n  wu_pin_ming_cheng TEXT, -- 物品名称\\n  lei_bie TEXT, -- 类别\\n  shu_liang TEXT, -- 数量\\n  yi_zhuang_bei TEXT, -- 已装备\\n  suo_shu_ren TEXT, -- 所属人\\n  te_xing TEXT, -- 特性\\n  xi_you_du TEXT, -- 稀有度\\n  miao_shu TEXT, -- 描述\\n  jia_zhi TEXT -- 价值\\n);"},"content":[["row_id","item_id","物品名称","类别","数量","已装备","所属人","特性","稀有度","描述","价值"]],"updateConfig":{"batchSize":-1,"uiSentinel":-1,"groupId":2,"updateFrequency":-1},"exportConfig":{"enabled":false,"splitByRow":false,"entryName":"背包物品","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"🎒 背包-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","sqlInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991}},"orderNo":2},"sheet_renwu":{"uid":"sheet_renwu","name":"📜 任务","sourceData":{"note":"-- 【任务追踪表】记录当前接取的主线、支线与个人契约，通过 quest_id 唯一追踪进度与状态。\\nCREATE TABLE sheet_renwu (\\n    row_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 行号: 自增物理主键\\n    quest_id TEXT NOT NULL UNIQUE, -- 任务编号: 业务唯一键,格式\'QUEST_XXX\'(如 \'QUEST_001\')\\n    ren_wu_ming_cheng TEXT NOT NULL, -- 任务名称: 任务标题(如 \'调查失落的哨卡遗迹\'、\'寻找稀有草药\')\\n    lei_xing TEXT NOT NULL CHECK (lei_xing IN (\'主线\',\'支线\',\'个人\')), -- 类型\\n    fa_bu_zhe TEXT NOT NULL, -- 发布者: 委托NPC姓名或组织势力名(如 \'银霜\' / \'冒险者公会\')\\n    mu_biao_miao_shu TEXT NOT NULL, -- 目标描述: 任务目标与具体要求(如 \'前往北境密林击溃溃逃的盗贼头目并取回信件\')\\n    dang_qian_jin_du TEXT NOT NULL, -- 当前进度: 详细推进节点(如 \'已发现盗贼营地痕迹(1/3),正在追踪足迹\')\\n    zhuang_tai TEXT NOT NULL DEFAULT \'进行中\' CHECK (zhuang_tai IN (\'进行中\',\'已完成\',\'已失败\')), -- 状态\\n    shi_xian TEXT NOT NULL DEFAULT \'无限制\', -- 时限: 剩余倒计时或绝对时间点(如 \'剩余2天\'/\'无限制\'/\'488-9-10前\')\\n    jiang_li TEXT -- 奖励: 预期经验/金币/物品奖励(如 \'300 EXP, 50 G, 精制短弓x1\')\\n);","initNode":"/* 【初始化触发规则】开局单次执行。根据开局背景设定或第一幕初始目标创建初始主线/背景任务；无明确任务时可填入初始生存/探索目标 */\\nINSERT INTO sheet_renwu (\\n    quest_id, ren_wu_ming_cheng, lei_xing, fa_bu_zhe,\\n    mu_biao_miao_shu, dang_qian_jin_du, zhuang_tai, shi_xian, jiang_li\\n) VALUES (\\n    \'QUEST_001\',\\n    \'{根据开局剧情提取: 初始核心目标或任务标题}\',\\n    \'主线\',\\n    \'{剧情发布者或\\"内心动机/生存本能\\"}\',\\n    \'{初始任务具体目标与通关条件}\',\\n    \'刚接取/刚启程，尚未展开调查\',\\n    \'进行中\',\\n    \'无限制\',\\n    \'{预期报酬或剧情收益，如: 解锁新区域/获得初始报酬}\'\\n);","updateNode":"/* 【更新触发规则】满足以下任意条件时按 quest_id 精确更新：\\n 1. 进度推进：收集线索、击败目标、到达地点时更新 dang_qian_jin_du。\\n 2. 状态结算：达成所有目标置为 \'已完成\'；超时或核心NPC死亡导致中断置为 \'已失败\'。\\n 3. 时限流逝：时间推移导致剩余天数减少时更新 shi_xian。 */\\nUPDATE sheet_renwu \\nSET \\n    dang_qian_jin_du = \'{最新进度描述，如: 已取得关键密信(2/2)，等待交付}\',\\n    zhuang_tai = \'{进行中 | 已完成 | 已失败}\',\\n    shi_xian = \'{最新剩余时限}\',\\n    jiang_li = \'{若奖励发生变更则更新，否则保持原值}\'\\nWHERE quest_id = \'{目标任务编号，如 QUEST_001}\';","insertNode":"/* 【新增触发规则】当与NPC对话接取新委托、触发隐藏剧情线或确立新个人目标时执行。quest_id 严格按 \'QUEST_002\', \'QUEST_003\' 递增分配 */\\nINSERT INTO sheet_renwu (\\n    quest_id, ren_wu_ming_cheng, lei_xing, fa_bu_zhe,\\n    mu_biao_miao_shu, dang_qian_jin_du, zhuang_tai, shi_xian, jiang_li\\n) VALUES (\\n    \'{递增编号: 如 QUEST_002}\',\\n    \'{新任务标题}\',\\n    \'{主线 | 支线 | 个人}\',\\n    \'{发布委托的NPC名或势力名}\',\\n    \'{具体目标与行动指引}\',\\n    \'接取完成，准备行动 (0%)\',\\n    \'进行中\',\\n    \'{时限: 如 \\"3天内\\" / \\"无限制\\"}\',\\n    \'{经验/报酬/声望/物品奖励}\'\\n);","deleteNode":"/* 【删除触发规则】当任务状态变为 \'已完成\' 或 \'已失败\'，且相关结算已完毕需清理任务栏时执行（若选择保留历史记录可不执行删除） */\\nDELETE FROM sheet_renwu \\nWHERE quest_id = \'{已结算的任务编号，如 QUEST_001}\' \\n   OR zhuang_tai IN (\'已完成\', \'已失败\');","ddl":"CREATE TABLE sheet_renwu (\\n  row_id INTEGER PRIMARY KEY,\\n  quest_id TEXT,\\n  ren_wu_ming_cheng TEXT, -- 任务名称\\n  lei_xing TEXT, -- 类型\\n  fa_bu_zhe TEXT, -- 发布者\\n  mu_biao_miao_shu TEXT, -- 目标描述\\n  dang_qian_jin_du TEXT, -- 当前进度\\n  zhuang_tai TEXT, -- 状态\\n  shi_xian TEXT, -- 时限\\n  jiang_li TEXT -- 奖励\\n);"},"content":[["row_id","quest_id","任务名称","类型","发布者","目标描述","当前进度","状态","时限","奖励"]],"updateConfig":{"batchSize":-1,"uiSentinel":-1,"groupId":2,"updateFrequency":-1},"exportConfig":{"enabled":false,"splitByRow":false,"entryName":"任务列表","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"📜 任务-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","sqlInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991}},"orderNo":3},"sheet_shilishengwang":{"uid":"sheet_shilishengwang","name":"🏛️ 势力声望","sourceData":{"note":"-- 【势力关系表】记录与各大王国、公会、教团及势力的外交关系、声望数值与特权/通缉状态。\\nCREATE TABLE sheet_shilishengwang (\\n    row_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 行号: 自增物理主键\\n    faction_id TEXT NOT NULL UNIQUE, -- 势力编号: 业务唯一键,格式\'FACTION_XXX\'(如 \'FACTION_001\')\\n    shi_li_ming_cheng TEXT NOT NULL, -- 势力名称: 组织/城邦/公会全称(如 \'北境守望者军团\'、\'秘银商会\')\\n    shi_li_lei_xing TEXT NOT NULL CHECK (shi_li_lei_xing IN (\'王国\',\'公会\',\'教团\',\'商会\',\'秘社\',\'部落\',\'军团\',\'其他\')), -- 势力类型\\n    shi_li_ling_xiu TEXT NOT NULL, -- 势力领袖: 最高领导者或代表人物(如 \'大团长·雷恩\'、\'主教·阿加莎\')\\n    shi_li_zong_zhi TEXT, -- 势力宗旨: 核心使命与教义理念(如 \'守护边境壁垒,清剿荒野异兽\')\\n    shi_li_zong_bu TEXT NOT NULL, -- 势力总部: 主城要塞或主要据点位置(如 \'凛冬要塞-最高指挥部\')\\n    shi_li_miao_shu TEXT, -- 势力描述: 背景历史、组织规模与特色风格\\n    guan_xi_deng_ji TEXT NOT NULL DEFAULT \'0中立\' CHECK (guan_xi_deng_ji IN (\'-2敌对\',\'-1不友善\',\'0中立\',\'+1友善\',\'+2盟友\')), -- 关系等级\\n    sheng_wang_zhi INTEGER NOT NULL DEFAULT 0, -- 声望值: 精细数值(-100~+100)\\n    zhu_jue_tou_xian TEXT NOT NULL DEFAULT \'无\', -- 主角头衔: 在该势力内的社会身份或荣誉阶位(如 \'无\'/\'外籍佣兵\'/\'名誉骑士\')\\n    guan_jian_shi_jian TEXT, -- 关键事件: 导致声望增减的重大转折事件记录(如 \'击退袭击营地的魔物\')\\n    te_quan_tong_ji TEXT -- 特权/通缉: 享受的特权或遭到的通缉状态(如 \'公会物资7折优惠\' 或 \'悬赏通缉(赏金300G)\')\\n);","initNode":"/* 【初始化触发规则】开局单次执行。根据开局背景设定，插入初始已知的核心势力（如主角出生的阵营、当地统治工会或已结怨的敌对组织） */\\nINSERT INTO sheet_shilishengwang (\\n    faction_id, shi_li_ming_cheng, shi_li_lei_xing, shi_li_ling_xiu,\\n    shi_li_zong_zhi, shi_li_zong_bu, shi_li_miao_shu, guan_xi_deng_ji,\\n    sheng_wang_zhi, zhu_jue_tou_xian, guan_jian_shi_jian, te_quan_tong_ji\\n) VALUES (\\n    \'FACTION_001\',\\n    \'{开局核心势力名称，如: 冒险者公会/当地领主军}\',\\n    \'公会\',\\n    \'{势力领袖或代表NPC全名}\',\\n    \'{势力的核心宗旨或理念}\',\\n    \'{该势力总部所在场景地名}\',\\n    \'{势力背景介绍与阵营倾向}\',\\n    \'0中立\',\\n    0,\\n    \'无\',\\n    \'建立初始接触\',\\n    \'无\'\\n);","updateNode":"/* 【更新触发规则】满足以下任意条件时按 faction_id 精确更新：\\n 1. 声望变动：完成任务、提供协助增加 sheng_wang_zhi；发生冲突、背叛减少 sheng_wang_zhi。\\n 2. 关系升降：当声望跨越阈值时同步调整 guan_xi_deng_ji（如 ≤-50 为 \'-2敌对\'，≥+50 为 \'+2盟友\'）。\\n 3. 头衔晋升：获得新的身份地位时更新 zhu_jue_tou_xian。\\n 4. 事件与特权：追加 guan_jian_shi_jian 记录；解锁特权或遭到悬赏时刷新 te_quan_tong_ji。 */\\nUPDATE sheet_shilishengwang \\nSET \\n    shi_li_ling_xiu = \'{领袖变动时更新，否则保持原值}\',\\n    shi_li_zong_bu = \'{据点迁移时更新，否则保持原值}\',\\n    guan_xi_deng_ji = \'{-2敌对 | -1不友善 | 0中立 | +1友善 | +2盟友}\',\\n    sheng_wang_zhi = {最新声望整数数值},\\n    zhu_jue_tou_xian = \'{最新头衔称号}\',\\n    guan_jian_shi_jian = \'{追加最新重大事件记录}\',\\n    te_quan_tong_ji = \'{最新特权福利或通缉悬赏信息}\'\\nWHERE faction_id = \'{目标势力编号，如 FACTION_001}\';","insertNode":"/* 【新增触发规则】当首次结识新势力、进入全新城邦/势力领地、或与新组织产生实质性交涉/冲突时执行。faction_id 严格按 \'FACTION_002\', \'FACTION_003\' 递增分配 */\\nINSERT INTO sheet_shilishengwang (\\n    faction_id, shi_li_ming_cheng, shi_li_lei_xing, shi_li_ling_xiu,\\n    shi_li_zong_zhi, shi_li_zong_bu, shi_li_miao_shu, guan_xi_deng_ji,\\n    sheng_wang_zhi, zhu_jue_tou_xian, guan_jian_shi_jian, te_quan_tong_ji\\n) VALUES (\\n    \'{递增编号: 如 FACTION_002}\',\\n    \'{新势力全名}\',\\n    \'{王国 | 公会 | 教团 | 商会 | 秘社 | 部落 | 军团 | 其他}\',\\n    \'{领袖或代表人物}\',\\n    \'{核心宗旨与信条}\',\\n    \'{总部所在场景名称}\',\\n    \'{背景历史与特色描述}\',\\n    \'0中立\',\\n    0,\\n    \'无\',\\n    \'{首次产生实质互动的契机记录}\',\\n    \'无\'\\n);","deleteNode":"/* 【删除触发规则】当势力被彻底歼灭、解散时执行物理删除 */\\nDELETE FROM sheet_shilishengwang \\nWHERE faction_id = \'{覆灭或注销的势力编号，如 FACTION_001}\';","ddl":"CREATE TABLE sheet_shilishengwang (\\n  row_id INTEGER PRIMARY KEY,\\n  faction_id TEXT,\\n  shi_li_ming_cheng TEXT, -- 势力名称\\n  shi_li_lei_xing TEXT, -- 势力类型\\n  shi_li_ling_xiu TEXT, -- 势力领袖\\n  shi_li_zong_zhi TEXT, -- 势力宗旨\\n  shi_li_zong_bu TEXT, -- 势力总部\\n  shi_li_miao_shu TEXT, -- 势力描述\\n  guan_xi_deng_ji TEXT, -- 关系等级\\n  sheng_wang_zhi INTEGER, -- 声望值\\n  zhu_jue_tou_xian TEXT, -- 主角头衔\\n  guan_jian_shi_jian TEXT, -- 关键事件\\n  te_quan_tong_ji TEXT -- 特权/通缉\\n);"},"content":[["row_id","faction_id","势力名称","势力类型","势力领袖","势力宗旨","势力总部","势力描述","关系等级","声望值","主角头衔","关键事件","特权/通缉"]],"updateConfig":{"batchSize":-1,"uiSentinel":-1,"updateFrequency":4,"groupId":2},"exportConfig":{"enabled":false,"splitByRow":false,"entryName":"势力关系","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"🏛️ 势力声望-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","sqlInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991}},"orderNo":4},"sheet_zhandouzaoyubiao":{"uid":"sheet_zhandouzaoyubiao","name":"⚔️ 战斗遭遇表","sourceData":{"note":"-- 【战斗核心表】仅在战斗模式激活，用于回合制战术追踪与前端战术地图UI联动渲染。\\nCREATE TABLE sheet_zhandouzaoyubiao (\\n    row_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 行号: 自增物理主键\\n    dan_wei_ming_cheng TEXT NOT NULL UNIQUE, -- 单位名称: 参战唯一标识,必须与地图表一致(如 \'丛林狼A\')\\n    zhen_ying TEXT NOT NULL CHECK (zhen_ying IN (\'友方\',\'敌方\',\'中立\')), -- 阵营: UI前端色彩渲染标记\\n    xian_gong_wei_zhi TEXT NOT NULL, -- 先攻/位置: 格式\'先攻值/相对战术位置\'(如 \'18/前排近战\'/\'12/后排30尺\')\\n    hp_zhuang_tai TEXT NOT NULL, -- HP状态: 格式\'当前/最大 [状态标签]\'(如 \'25/30 [健康]\'/\'0/18 [濒死†]\')\\n    fang_yu_kang_xing TEXT NOT NULL, -- 防御/抗性: DND5E基础AC与伤害抗性/免疫(如 \'AC16 抗寒\'/\'AC13 弱火\')\\n    fu_zhuo_zhuang_tai TEXT NOT NULL DEFAULT \'无\' -- 附着状态: Buff/Debuff/倒地/受擒/专注,分号分隔(如 \'倒地; 祝福术光环\')\\n);","initNode":"/* 【战斗开始触发规则】当触发战斗遭遇时执行：\\n 1. 投掷双方先攻值（1d20+敏捷调整值），按先攻由高到低降序依次插入所有参战单位。\\n 2. 初始化各单位的生命值、AC防御抗性。\\n 3. 同步将全局状态表 sheet_quanjuzhuangtai 的 zhan_dou_mo_shi 改为 \'战斗中\'。 */\\nINSERT INTO sheet_zhandouzaoyubiao (\\n    dan_wei_ming_cheng, zhen_ying, xian_gong_wei_zhi,\\n    hp_zhuang_tai, fang_yu_kang_xing, fu_zhuo_zhuang_tai\\n) VALUES \\n(\\n    \'{主角名}\',\\n    \'友方\',\\n    \'{主角先攻值}/前排近战\',\\n    \'{当前HP/最大HP} [健康]\',\\n    \'AC15\',\\n    \'无\'\\n),\\n(\\n    \'{敌人A名称: 如 狂暴雪狼}\',\\n    \'敌方\',\\n    \'{敌方先攻值}/近战接触\',\\n    \'{敌方当前HP/最大HP} [完好]\',\\n    \'AC13 抗寒\',\\n    \'无\'\\n);","updateNode":"/* 【每轮/每动作必更】满足以下任意战斗动作时按 dan_wei_ming_cheng 更新：\\n 1. 命中与伤害：结算扣除目标 HP 并刷新状态标签（如 HP归零变为 \'0/25 [濒死†]\' 或 \'[阵亡†]\'）。\\n 2. 战术位移：移动后更新 xian_gong_wei_zhi 中的相对位置。\\n 3. 状态更迭：施加或解除 Buff/Debuff 时刷新 fu_zhuo_zhuang_tai（如倒地、受擒、目盲）。 */\\nUPDATE sheet_zhandouzaoyubiao \\nSET \\n    xian_gong_wei_zhi = \'{先攻值}/{最新相对位置或距离}\',\\n    hp_zhuang_tai = \'{更新后HP/最大HP} [{健康 | 轻伤 | 重伤 | 濒死† | 阵亡†}]\',\\n    fang_yu_kang_xing = \'{AC及抗性状态}\',\\n    fu_zhuo_zhuang_tai = \'{最新Buff/Debuff列表，分号分隔，无则填 \\"无\\"}\'\\nWHERE dan_wei_ming_cheng = \'{受影响的目标单位名称}\';","insertNode":"/* 【新增触发规则】当战斗中途有增援入场、召唤物生成或第三方势力介入时执行 */\\nINSERT INTO sheet_zhandouzaoyubiao (\\n    dan_wei_ming_cheng, zhen_ying, xian_gong_wei_zhi,\\n    hp_zhuang_tai, fang_yu_kang_xing, fu_zhuo_zhuang_tai\\n) VALUES (\\n    \'{新参战单位名称: 如 召唤狼灵/敌方援军B}\',\\n    \'{友方 | 敌方 | 中立}\',\\n    \'{入场先攻值}/{入场相对位置: 如 后排60尺}\',\\n    \'{当前HP/最大HP} [健康]\',\\n    \'{AC数值及抗性/弱点}\',\\n    \'{初始自带状态，如: 漂浮/隐形/无}\'\\n);","deleteNode":"/* 【删除触发规则】\\n 1. 战斗结束（敌方全灭/逃跑/战斗胜利）：清空全表数据，并同步将全局状态表的战斗模式置为 \'非战斗\'。\\n 2. 召唤物消散或被击杀且无需保留尸体时，可单独删除该行。 */\\nDELETE FROM sheet_zhandouzaoyubiao;","ddl":"CREATE TABLE sheet_zhandouzaoyubiao (\\n  row_id INTEGER PRIMARY KEY,\\n  dan_wei_ming_cheng TEXT, -- 单位名称\\n  zhen_ying TEXT, -- 阵营\\n  xian_gong_wei_zhi TEXT, -- 先攻/位置\\n  hp_zhuang_tai TEXT, -- HP状态\\n  fang_yu_kang_xing TEXT, -- 防御/抗性\\n  fu_zhuo_zhuang_tai TEXT -- 附着状态\\n);"},"content":[["row_id","单位名称","阵营","先攻/位置","HP状态","防御/抗性","附着状态"]],"updateConfig":{"contextDepth":-1,"updateFrequency":-1,"batchSize":3,"uiSentinel":-1,"groupId":3},"exportConfig":{"enabled":false,"splitByRow":false,"entryName":"战斗遭遇","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"⚔️ 战斗遭遇表-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","sqlInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991},"injectIntoWorldbook":false},"orderNo":5},"sheet_zhandouditu":{"uid":"sheet_zhandouditu","name":"🗺️ 战斗地图","sourceData":{"note":"-- 【战术地图数据表】存储战场几何空间网格与图元坐标，前端 Canvas/UI 依据此表实时可视化渲染。\\n-- ⚠️ 前端渲染铁律：坐标与大小必须严格保持 JSON 键值对格式，否则地图渲染引擎崩溃。\\nCREATE TABLE sheet_zhandouditu (\\n    row_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 行号: 自增物理主键\\n    dan_wei_ming_cheng TEXT NOT NULL UNIQUE, -- 单位名称: 与遭遇表一致,配置行固定为\'Map_Config\'(如 \'凯莉\'/\'雪狼A\'/\'Wall_1\'/\'Map_Config\')\\n    lei_xing TEXT NOT NULL CHECK (lei_xing IN (\'Config\',\'Token\',\'Wall\',\'Terrain\',\'Zone\')), -- 类型\\n    zuo_biao TEXT NOT NULL, -- 坐标: Config行\'{\\"w\\":宽,\\"h\\":高}\',实体行\'{\\"x\\":列,\\"y\\":行}\'(如 \'{\\"w\\":20,\\"h\\":20}\'/\'{\\"x\\":4,\\"y\\":8}\')\\n    da_xiao TEXT NOT NULL DEFAULT \'{\\"w\\":1,\\"h\\":1}\', -- 大小: 占格\'{\\"w\\":宽,\\"h\\":高}\'(如 \'{\\"w\\":1,\\"h\\":1}\'/\'{\\"w\\":2,\\"h\\":2}\')\\n    token TEXT -- Token: DiceBear图标,格式\'风格:种子\'(如 \'adventurer:Hero\'/\'bottts:Slime\'/\'icons:fire\')\\n);","initNode":"/* 【战斗开始触发规则】战斗打响时按顺序初始化战术棋盘：\\n 1. 必须插入且仅能有 1 行 \'Map_Config\' 设定地图总网格大小（默认 20x20）。\\n 2. 根据场景插入静态地形阻碍（Wall 障碍物 / Terrain 困难地形）。\\n 3. 为所有参战角色插入 Token 行，分配互不重叠的初始 {\\"x\\":X,\\"y\\":Y} 坐标。 */\\nINSERT INTO sheet_zhandouditu (\\n    dan_wei_ming_cheng, lei_xing, zuo_biao, da_xiao, token\\n) VALUES \\n(\\n    \'Map_Config\',\\n    \'Config\',\\n    \'{\\"w\\":20,\\"h\\":20}\',\\n    \'{\\"w\\":20,\\"h\\":20}\',\\n    \'config:default\'\\n),\\n(\\n    \'{主角名}\',\\n    \'Token\',\\n    \'{\\"x\\":5,\\"y\\":10}\',\\n    \'{\\"w\\":1,\\"h\\":1}\',\\n    \'adventurer:Hero\'\\n),\\n(\\n    \'{敌人A名称: 如 帝国卫兵A}\',\\n    \'Token\',\\n    \'{\\"x\\":15,\\"y\\":10}\',\\n    \'{\\"w\\":1,\\"h\\":1}\',\\n    \'bottts:Wolf\'\\n),\\n(\\n    \'Wall_Rock_1\',\\n    \'Wall\',\\n    \'{\\"x\\":10,\\"y\\":10}\',\\n    \'{\\"w\\":1,\\"h\\":2}\',\\n    \'icons:stone\'\\n);","updateNode":"/* 【更新触发规则】满足以下任意空间位移/环境变化时更新：\\n 1. 角色移动：单位执行移动动作后，按 dan_wei_ming_cheng 更新其在网格中的最新 zuo_biao。\\n 2. 区域/障碍变化：法术区域蔓延、障碍物被摧毁时更新坐标或大小。 */\\nUPDATE sheet_zhandouditu \\nSET \\n    zuo_biao = \'{\\"x\\":{最新X列坐标},\\"y\\":{最新Y行坐标}}\',\\n    da_xiao = \'{体型或覆盖范围变更时更新，否则保持原值}\'\\nWHERE dan_wei_ming_cheng = \'{移动或变化的目标名称，如 \\"利姆鲁\\"}\';","insertNode":"/* 【新增触发规则】\\n 1. 增援/召唤物入场：新增类型为 \'Token\' 的行并分配空闲坐标。\\n 2. 区域法术生效：施放火球术/蛛网术/浓雾术等范围法术时，新增类型为 \'Zone\' 的行并记录法术范围覆盖尺寸。 */\\nINSERT INTO sheet_zhandouditu (\\n    dan_wei_ming_cheng, lei_xing, zuo_biao, da_xiao, token\\n) VALUES (\\n    \'{单位名或法术区域名: 如 \\"召唤灵狼\\" / \\"Zone_火球术_1\\"}\',\\n    \'{Token | Wall | Terrain | Zone}\',\\n    \'{放置中心坐标: 如 {\\"x\\":8,\\"y\\":12}}\',\\n    \'{覆盖格数: 如 {\\"w\\":1,\\"h\\":1} 或 {\\"w\\":4,\\"h\\":4}}\',\\n    \'{DiceBear图标种子: 如 \\"bottts:Wolf\\" / \\"icons:fire\\"}\'\\n);","deleteNode":"/* 【删除触发规则】战斗彻底结束时执行清空；局部单位消散时按名称删除 */\\nDELETE FROM sheet_zhandouditu \\nWHERE dan_wei_ming_cheng = \'{已消散/过期的单位或法术区域名}\'\\n   OR \'{是否已彻底脱战: 是/否}\' = \'是\';","ddl":"CREATE TABLE sheet_zhandouditu (\\n  row_id INTEGER PRIMARY KEY,\\n  dan_wei_ming_cheng TEXT, -- 单位名称\\n  lei_xing TEXT, -- 类型\\n  zuo_biao TEXT, -- 坐标\\n  da_xiao TEXT, -- 大小\\n  token TEXT -- Token\\n);"},"content":[["row_id","单位名称","类型","坐标","大小","Token"]],"updateConfig":{"contextDepth":-1,"updateFrequency":-1,"batchSize":3,"uiSentinel":-1,"groupId":3},"exportConfig":{"enabled":false,"splitByRow":false,"entryName":"战斗地图","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"🗺️ 战斗地图-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","sqlInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991},"injectIntoWorldbook":false},"orderNo":6},"sheet_jiyaobiao":{"uid":"sheet_jiyaobiao","name":"纪要表","sourceData":{"note":"-- 【轮次纪要表】按轮次递增客观记录剧情事实，提供历史回溯与长程上下文记忆锚点。\\nCREATE TABLE sheet_jiyaobiao (\\n    row_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 行号: 自增物理主键\\n    time_span TEXT NOT NULL, -- 时间跨度: 本轮起止时间(如 \'488-8-15 08:00 - 08:15\')\\n    location TEXT NOT NULL, -- 地点: 从大到小精确层级(如 \'北境-迷雾山脉-隐蔽洞穴\')\\n    chronicle_text TEXT NOT NULL, -- 纪要: 第三方客观事实(≥150字,以第三方视角客观记录本轮事件，不得加入推测、情绪化语言、负面解读或主观判断。内容必须基于正文明确发生的事实，不得补充未出现的情节，不少于150字，结尾部分禁止进行总结或者升华)\\n    summary TEXT NOT NULL, -- 概览: 30字以内一句话核心事件概述(如 \'主角与守林人汇合并抵御了第一波狼群夜袭\')\\n    code_index TEXT NOT NULL UNIQUE -- 编码索引: 格式\'AMXXXX\'从0001递增(如 \'AM0001\')\\n);","initNode":"/* 【初始化触发规则】开局单次执行。为开局第一幕剧情插入初始日志 AM0001；必须客观记录开局发生的所有既定事实，字数不少于150字 */\\nINSERT INTO sheet_jiyaobiao (\\n    time_span, location, chronicle_text, summary, code_index\\n) VALUES (\\n    \'{开局起止时间跨度: 如 \\"488-8-15 08:00 - 08:15\\"}\',\\n    \'{开局地点: 从大到小层级地名}\',\\n    \'{开局纪要: 以第三方客观视角记录第一幕发生的全部既定事实，严禁加入推测、情绪化语言与主观判断，末尾禁止升华总结}\',\\n    \'{30字以内一句话概括开局第一幕核心内容}\',\\n    \'AM0001\'\\n);","deleteNode":"/* 严格禁止删除：纪要表为长程记忆与历史回溯的唯一核心，物理删除将造成上下文记忆断代 */","updateNode":"/* 严格禁止更新：纪要表为不可篡改的时序事实日志，已沉淀的历史数据永久锁定 */","insertNode":"/* 【每轮必增规则】每轮对话交互结束后必须立即插入 1 条新记录；code_index 严格按 \'AM0002\', \'AM0003\' 递增；纪要内容必须基于正文明确发生的事实 */\\nINSERT INTO sheet_jiyaobiao (\\n    time_span, location, chronicle_text, summary, code_index\\n) VALUES (\\n    \'{本轮精确时间范围: 如 \\"488-8-15 07:30 - 07:45\\"}\',\\n    \'{本轮事件发生的具体地点}\',\\n    \'{第三方客观叙事纪要：真实记录本轮行动、对话结果、检定与战斗交锋事实，结尾严禁进行概括升华}\',\\n    \'{30字以内的一句话核心事件提炼}\',\\n    \'{递增编号: 如 AM0002}\'\\n);","ddl":"CREATE TABLE chronicle ( -- 纪要表\\n  row_id INTEGER PRIMARY KEY, -- 行号\\n  time_span TEXT, -- 时间跨度\\n  location TEXT, -- 地点\\n  chronicle_text TEXT, -- 纪要\\n  summary TEXT, -- 概览\\n  code_index TEXT -- 编码索引\\n);"},"content":[["row_id","时间跨度","地点","纪要","概览","编码索引"]],"updateConfig":{"uiSentinel":-1,"contextDepth":-1,"updateFrequency":-1,"batchSize":-1,"skipFloors":-1,"groupId":2},"exportConfig":{"enabled":true,"splitByRow":true,"entryName":"纪要","entryType":"keyword","keywords":"编码索引","preventRecursion":true,"injectionTemplate":"<历史信息概要>\\n$1\\n</历史信息概要>","extraIndexEnabled":true,"extraIndexEntryName":"纪要索引","extraIndexColumns":["概览","编码索引"],"extraIndexColumnModes":{"概览":"index_only","编码索引":"both"},"extraIndexInjectionTemplate":"<历史信息概要索引>\\n$1\\n</历史信息概要索引>","sqlInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":999,"order":10010},"extraIndexPlacement":{"position":"at_depth_as_system","depth":999,"order":10000},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":9999,"order":99987},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":9999,"order":99988}},"orderNo":7},"sheet_xingdongxuanxiang":{"uid":"sheet_xingdongxuanxiang","name":"🎮 行动选项","sourceData":{"note":"-- 【前端UI交互表】每轮为玩家生成4个合理且策略各异的行动方案，前端渲染为快捷点击按钮。\\n-- 约束铁律：单例表仅允许存在 1 行(row_id=1)。选项严禁生成无意义/送死选项，必须针对当前局势提供4种不同的破局方法。\\nCREATE TABLE sheet_xingdongxuanxiang (\\n    row_id INTEGER PRIMARY KEY CHECK (row_id = 1), -- 行号: 单例主键锁定为1\\n    xuan_xiang_a TEXT NOT NULL, -- 选项A: 【战术突破/物理身手】利用直觉、射程、潜行或硬实力(如 \'【战术压制】借助掩体抢先射击阻截敌方前锋(敏捷/远程)\')\\n    xuan_xiang_b TEXT NOT NULL, -- 选项B: 【环境借力/知识洞察】利用奥秘、地形破坏、机关或弱点(如 \'【环境借力】击碎头顶冰柱封锁通道(调查/运动)\')\\n    xuan_xiang_c TEXT NOT NULL, -- 选项C: 【谋略诡道/心理博弈】利用欺瞒、威慑、误导或阵营博弈(如 \'【虚实误导】利用伪装声东击西引开守卫(欺瞒/隐匿)\')\\n    xuan_xiang_d TEXT NOT NULL -- 选项D: 【特质专精/异能底牌】调用专属特技、法术位、底牌或协同(如 \'【异能转化】启用原质核心吸收并中和寒毒(体质豁免)\')\\n);","initNode":"/* 【初始化触发规则】开局单次执行。根据开局第一幕的处境，为玩家量身定制 4 个合理的起手行动方案 */\\nINSERT INTO sheet_xingdongxuanxiang (\\n    row_id, xuan_xiang_a, xuan_xiang_b, xuan_xiang_c, xuan_xiang_d\\n) VALUES (\\n    1,\\n    \'{选项A: 战术/侦查类合理行动方案，带(检定项)}\',\\n    \'{选项B: 观察/分析环境类合理行动方案，带(检定项)}\',\\n    \'{选项C: 试探/对话/谨慎类合理行动方案，带(检定项)}\',\\n    \'{选项D: 运用自身专属能力/准备底牌类行动，带(检定项)}\'\\n);","updateNode":"/* 【每轮必更】每轮交互后必须根据最新剧情事实与环境危机，重新生成 4 个可行性极高但解决维度完全不同的行动选项：\\n - A: 侧重直接身手/战术应对；\\n - B: 侧重环境交互/知识利用；\\n - C: 侧重策略博弈/心理试探；\\n - D: 侧重专属特技/异能道具。\\n 选项必须包含【行动标签】与后置(潜在DND检定)。 */\\nUPDATE sheet_xingdongxuanxiang \\nSET \\n    xuan_xiang_a = \'{最新选项A: 【战术突破】具体方案描述 (属性/技能检定)}\',\\n    xuan_xiang_b = \'{最新选项B: 【环境借力】具体方案描述 (属性/技能检定)}\',\\n    xuan_xiang_c = \'{最新选项C: 【谋略博弈】具体方案描述 (属性/技能检定)}\',\\n    xuan_xiang_d = \'{最新选项D: 【特质专精】具体方案描述 (属性/技能检定)}\'\\nWHERE row_id = 1;","insertNode":"/* 严格禁止新增：此表为单例UI交互表，全生命周期内锁定仅允许 row_id = 1 存在 */","deleteNode":"/* 严格禁止删除：行动选项表为前端核心交互组件，物理删除将导致前端按钮界面无法渲染 */","ddl":"CREATE TABLE sheet_xingdongxuanxiang (\\n  row_id INTEGER PRIMARY KEY,\\n  xuan_xiang_a TEXT, -- 选项A\\n  xuan_xiang_b TEXT, -- 选项B\\n  xuan_xiang_c TEXT, -- 选项C\\n  xuan_xiang_d TEXT -- 选项D\\n);"},"content":[["row_id","选项A","选项B","选项C","选项D"]],"updateConfig":{"uiSentinel":-1,"contextDepth":-1,"updateFrequency":-1,"batchSize":-1,"skipFloors":-1,"groupId":2},"exportConfig":{"enabled":false,"splitByRow":false,"entryName":"行动选项","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"🎮 行动选项-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","sqlInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991},"injectIntoWorldbook":false},"orderNo":8},"sheet_touzichi":{"uid":"sheet_touzichi","name":"🎲 骰子池","sourceData":{"note":"-- 【真随机骰子池】前端JS脚本自动维护的先入先出(FIFO)随机数队列。AI为纯消费者：检定时读取第1行数值使用，随后必须立即删除该行。\\nCREATE TABLE sheet_touzichi (\\n    row_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 行号: 自增物理主键\\n    dice_id TEXT NOT NULL, -- 骰子编号: 队列序号(如 \'1\'、\'2\')\\n    d4 INTEGER NOT NULL CHECK (d4 BETWEEN 1 AND 4), -- D4骰值: 范围[1-4]\\n    d6 INTEGER NOT NULL CHECK (d6 BETWEEN 1 AND 6), -- D6骰值: 范围[1-6]\\n    d8 INTEGER NOT NULL CHECK (d8 BETWEEN 1 AND 8), -- D8骰值: 范围[1-8]\\n    d10 INTEGER NOT NULL CHECK (d10 BETWEEN 1 AND 10), -- D10骰值: 范围[1-10]\\n    d12 INTEGER NOT NULL CHECK (d12 BETWEEN 1 AND 12), -- D12骰值: 范围[1-12]\\n    d20 INTEGER NOT NULL CHECK (d20 BETWEEN 1 AND 20), -- D20骰值: 范围[1-20]\\n    d100 INTEGER NOT NULL CHECK (d100 BETWEEN 1 AND 100) -- D100骰值: 范围[1-100]\\n);","initNode":"/* 严格禁止手动初始化：此表由前端插件脚本在开局时自动批量生成并填充真随机数 */","updateNode":"/* 严格禁止更新：已生成的真随机数具有绝对防伪性，严禁篡改任何骰面数值 */","insertNode":"/* 严格禁止AI新增：随机数由前端脚本实时监控并在低于阈值时自动补充，AI禁止自行生成随机数 */","deleteNode":"/* 【使用后立即删除铁律】\\n 当战斗中需要进行 DND 5E 判定时（如 D20 属性/技能检定、攻击命中、法术豁免，或 D4~D12 伤害骰计算）：\\n 1. 严格提取当前表中第一行（MIN(row_id) 或当前第一条有效记录）对应的骰子数值作为判定依据；\\n 2. 将计算结果如实写入剧情与战斗表；\\n 3. 必须立即执行下方 DELETE 语句将该行消耗销毁，确保下一次检定使用全新的随机数！\\n 4. 非战斗情况无需使用，掷骰结果由前端脚本完成 */\\nDELETE FROM sheet_touzichi \\nWHERE row_id = (SELECT MIN(row_id) FROM sheet_touzichi);","ddl":"CREATE TABLE sheet_touzichi (\\n  row_id INTEGER PRIMARY KEY,\\n  dice_id TEXT, -- DICE_ID\\n  d4 TEXT, -- D4\\n  d6 TEXT, -- D6\\n  d8 TEXT, -- D8\\n  d10 TEXT, -- D10\\n  d12 TEXT, -- D12\\n  d20 TEXT, -- D20\\n  d100 TEXT -- D100\\n);"},"content":[["row_id","DICE_ID","D4","D6","D8","D10","D12","D20","D100"]],"updateConfig":{"batchSize":-1,"uiSentinel":-1,"groupId":2},"exportConfig":{"enabled":true,"splitByRow":false,"entryName":"骰子池","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"🎲 骰子池-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","sqlInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991},"injectIntoWorldbook":false},"orderNo":9},"sheet_jinengfashuku":{"uid":"sheet_jinengfashuku","name":"📚 技能/法术库","sourceData":{"note":"-- 【共享技能法术库】存储全量可复用的法术、武技、专长与天赋机制，角色通过关联表 sheet_juesejinengguanlian 引用此库中的技能。\\n-- ⚠️ 技能准入铁律：仅收录带明确命名且具独立数值/机制的招式\\nCREATE TABLE sheet_jinengfashuku (\\n    row_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 行号: 自增物理主键\\n    skill_id TEXT NOT NULL UNIQUE, -- 技能编号: 格式\'SKILL_XX\'(如 \'SKILL_01\')\\n    ji_neng_ming_cheng TEXT NOT NULL, -- 技能名称: 法术/招式/天赋全名(如 \'火球术\'/\'至圣斩\'/\'捕食者\')\\n    ji_neng_lei_xing TEXT NOT NULL CHECK (ji_neng_lei_xing IN (\'法术\',\'武技\',\'特技\',\'天赋\',\'种族能力\',\'职业能力\')), -- 技能类型\\n    huan_jie TEXT NOT NULL DEFAULT \'-\', -- 环阶: 法术环位(0~9环,0=戏法),非法术招式填\'-\'(如 \'3环\' / \'-\')\\n    shi_fa_shi_jian TEXT NOT NULL DEFAULT \'1动作\', -- 施法时间: 动作消耗(如 \'1动作\'/\'1附赠\'/\'1反应\')\\n    she_cheng TEXT NOT NULL DEFAULT \'自身\', -- 射程: 作用距离或范围(如 \'自身\'/\'接触\'/\'30尺\'/\'15尺锥状\'/\'20尺范围，15尺半径的圆\')\\n    xiao_hao_zi_yuan TEXT NOT NULL DEFAULT \'无\', -- 消耗资源: 法术位/气点/怒气/次数(如 \'3环法术位x1\'/\'气点x1\'/\'每日1次\')\\n    chi_xu_shi_jian TEXT NOT NULL DEFAULT \'立即\', -- 持续时间: 持续/专注时长(如 \'立即\'/\'专注,至多5回合\'/\'8小时\')\\n    xiao_guo_miao_shu TEXT NOT NULL, -- 效果描述: 完整机制条款/豁免DC/伤害骰(禁止概括或简化,优先摘录正文中含自制规则的详细描述，仅在正文缺失细节时调用DND规则库)\\n    sheng_jie_xiao_guo TEXT DEFAULT \'-\' -- 升阶效果: 高环施法追加伤害/目标数(非法术或无升阶填\'-\')\\n);","initNode":"/* 【初始化触发规则】开局单次执行或由脚本批量注入。按规范插入角色开局自带的核心专属技能/法术模板 */\\nINSERT INTO sheet_jinengfashuku (\\n    skill_id, ji_neng_ming_cheng, ji_neng_lei_xing, huan_jie,\\n    shi_fa_shi_jian, she_cheng, xiao_hao_zi_yuan, chi_xu_shi_jian,\\n    xiao_guo_miao_shu, sheng_jie_xiao_guo\\n) VALUES (\\n    \'SKILL_01\',\\n    \'{初始核心法术/招式名: 如 \\"火球术\\"}\',\\n    \'法术\',\\n    \'3环\',\\n    \'1动作\',\\n    \'40尺\',\\n    \'3环法术位x1\',\\n    \'立即\',\\n    \'指定射程内一点爆发20尺半径火球。区域内生物须进行敏捷豁免，失败受8d6火焰伤害，成功受半。点燃未被着装的可燃物。\',\\n    \'使用4环或更高法术位施展时，每高1环伤害增加1d6。\'\\n);","updateNode":"/* 严格禁止更新：技能库为底层通用规则定义，条目生成后永久只读。技能等级/进阶通过 insertNode 插入新技能条目，不得直接覆盖原技能定义 */","insertNode":"/* 【新增触发规则】当角色正式领悟/习得全新能力时执行。skill_id 严格按 \'SKILL_02\', \'SKILL_03\' 递增分配。\\n \\n ⛔ 严禁收录（直接忽略，禁止执行INSERT）：\\n  1. 临时肢体行为（如：跳跃、捡石头、翻滚躲闪、攀爬、踢门等普通检定动作）；\\n  2. 纯对话/剧情描写（如：威慑某人、施展眼神、日常交流）；\\n \\n ✅ 准入条件（满足以下之一方可收录）：\\n  1. 正文明确提及获得了正式命名的法术/招式（如雷鸣波、闪电箭矢）；\\n  2. 具备固定的资源消耗（法术位/职业资源/充能）或明确的伤害骰/豁免DC机制/给敌人debuff/给友方buff。\\n  *规则摘录铁律：若正文有自制/魔改数值必须原样摘录，未写明细节时方可调用DND5E标准规则补全。 */\\nINSERT INTO sheet_jinengfashuku (\\n    skill_id, ji_neng_ming_cheng, ji_neng_lei_xing, huan_jie,\\n    shi_fa_shi_jian, she_cheng, xiao_hao_zi_yuan, chi_xu_shi_jian,\\n    xiao_guo_miao_shu, sheng_jie_xiao_guo\\n) VALUES (\\n    \'{递增编号: 如 SKILL_02}\',\\n    \'{正式技能/法术全名}\',\\n    \'{法术 | 武技 | 特技 | 天赋 | 种族能力 | 职业能力}\',\\n    \'{环位: 0~9环 或 \\"-\\"}\',\\n    \'{1动作 | 1附赠 | 1反应 | X分钟}\',\\n    \'{射程: 如 60尺 / 自身 / 接触}\',\\n    \'{消耗: 如 \\"1环法术位x1\\" / \\"每日2次\\" / \\"战术点\\" / \\"无\\"}\',\\n    \'{持续: 如 \\"立即\\" / \\"专注,1分钟\\" / \\"8小时\\"}\',\\n    \'{完整规则文本与伤害骰/豁免DC判定机制}\',\\n    \'{高环施法效果，无则填 \\"-\\"}\'\\n);","deleteNode":"/* 【删除触发规则】仅当确认该技能已被永久废弃、被彻底遗忘，且没有任何角色在【角色技能关联表】中引用此 skill_id 时方可删除 */\\nDELETE FROM sheet_jinengfashuku \\nWHERE skill_id = \'{确认废弃且无关联的技能编号，如 SKILL_19}\';","ddl":"CREATE TABLE sheet_jinengfashuku (\\n  row_id INTEGER PRIMARY KEY,\\n  skill_id TEXT,\\n  ji_neng_ming_cheng TEXT, -- 技能名称\\n  ji_neng_lei_xing TEXT, -- 技能类型\\n  huan_jie TEXT, -- 环阶\\n  shi_fa_shi_jian TEXT, -- 施法时间\\n  she_cheng TEXT, -- 射程\\n  xiao_hao_zi_yuan TEXT, -- 消耗资源\\n  chi_xu_shi_jian TEXT, -- 持续时间\\n  xiao_guo_miao_shu TEXT, -- 效果描述\\n  sheng_jie_xiao_guo TEXT -- 升阶效果\\n);"},"content":[["row_id","skill_id","技能名称","技能类型","环阶","施法时间","射程","消耗资源","持续时间","效果描述","升阶效果"]],"updateConfig":{"batchSize":1,"uiSentinel":-1,"groupId":1,"updateFrequency":-1},"exportConfig":{"enabled":false,"splitByRow":false,"entryName":"技能库","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"📚 技能/法术库-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","sqlInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991}},"orderNo":10},"sheet_juesejinengguanlian":{"uid":"sheet_juesejinengguanlian","name":"🔗 角色技能关联","sourceData":{"note":"-- 【角色技能关联表】建立角色与技能库的多对多映射，追踪各角色的法术准备状态与施法属性。\\nCREATE TABLE sheet_juesejinengguanlian (\\n    row_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 行号: 自增物理主键\\n    skill_link_id TEXT NOT NULL UNIQUE, -- 关联编号: 业务唯一键,格式\'SLINK_XX\'(如 \'SLINK_13\')\\n    char_id TEXT NOT NULL, -- 角色编号: 主角固定为\'PC_MAIN\',同伴为\'ALLY_XX\'(如 \'PC_MAIN\'/\'ALLY_02\')\\n    skill_id TEXT NOT NULL, -- 技能编号: 关联技能库的 skill_id(如 \'SKILL_04\')\\n    yi_zhun_bei TEXT NOT NULL DEFAULT \'是\' CHECK (yi_zhun_bei IN (\'是\',\'否\')), -- 已准备: 法术准备状态(戏法/武技/被动恒为\'是\')\\n    bei_zhu TEXT -- 备注: 限制条件/施法属性/获取来源(如 \'智力施法,DC 14\'/\'法术学院学习获取\')\\n);","initNode":"/* 【初始化触发规则】开局单次执行或由角色创建脚本注入。为主角(PC_MAIN)及初始同伴绑定其开局已掌握的初始技能条目 */\\nINSERT INTO sheet_juesejinengguanlian (\\n    skill_link_id, char_id, skill_id, yi_zhun_bei, bei_zhu\\n) VALUES \\n(\\n    \'SLINK_01\',\\n    \'PC_MAIN\',\\n    \'SKILL_01\',\\n    \'是\',\\n    \'{初始能力来源，如: 职业初始掌握 / 原生天赋}\'\\n),\\n(\\n    \'SLINK_02\',\\n    \'{初始同伴ID: 如 ALLY_01}\',\\n    \'SKILL_01\',\\n    \'是\',\\n    \'{同伴能力来源备注}\'\\n);","updateNode":"/* 【更新触发规则】满足以下任意条件时按 skill_link_id 或 (char_id + skill_id) 精确更新：\\n 1. 法术准备更迭：施法职业（法师/牧师/德鲁伊/圣武士等）在完成【长休】后更换准备法术时，切换 yi_zhun_bei 为 \'是\' 或 \'否\'。\\n 2. 熟练度与DC提升：角色属性提升导致法术豁免 DC、攻击命中加值或使用限制变化时，刷新 bei_zhu。 */\\nUPDATE sheet_juesejinengguanlian \\nSET \\n    yi_zhun_bei = \'{是 | 否}\',\\n    bei_zhu = \'{最新施法DC/加值/限制说明}\'\\nWHERE skill_link_id = \'{目标关联编号，如 SLINK_01}\'\\n   OR (char_id = \'{角色ID}\' AND skill_id = \'{技能ID}\');","insertNode":"/* 【新增触发规则】当角色通过研习书卷、顿悟、或拜师学习、转化习得全新能力时，在技能库录入后，必须在此表建立绑定关系。skill_link_id 严格按 \'SLINK_03\', \'SLINK_04\' 递增 */\\nINSERT INTO sheet_juesejinengguanlian (\\n    skill_link_id, char_id, skill_id, yi_zhun_bei, bei_zhu\\n) VALUES (\\n    \'{递增关联编号: 如 SLINK_03}\',\\n    \'{学习者角色ID: PC_MAIN 或 ALLY_XX}\',\\n    \'{关联的技能编号: 如 SKILL_02}\',\\n    \'{法术类根据是否准备填 是/否，武技/特技固定为 是}\',\\n    \'{学习来源、施法关键属性、DC检定加值或限制条件}\'\\n);","deleteNode":"/* 【删除触发规则】仅当角色因诅咒、契约破裂、遗忘法术或永久丧失该项能力时，解除对应映射关系（极为少见） */\\nDELETE FROM sheet_juesejinengguanlian \\nWHERE skill_link_id = \'{解绑的关联编号，如 SLINK_06}\'\\n   OR (char_id = \'{角色ID}\' AND skill_id = \'{废弃的技能ID}\');","ddl":"CREATE TABLE sheet_juesejinengguanlian (\\n  row_id INTEGER PRIMARY KEY,\\n  skill_link_id TEXT,\\n  char_id TEXT,\\n  skill_id TEXT,\\n  yi_zhun_bei TEXT, -- 已准备\\n  bei_zhu TEXT -- 备注\\n);"},"content":[["row_id","skill_link_id","char_id","skill_id","已准备","备注"]],"updateConfig":{"batchSize":1,"uiSentinel":-1,"groupId":1,"updateFrequency":-1},"exportConfig":{"enabled":false,"splitByRow":false,"entryName":"角色技能","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"🔗 角色技能关联-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","sqlInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991}},"orderNo":11},"sheet_zhuanchangku":{"uid":"sheet_zhuanchangku","name":"🏅 专长库","sourceData":{"note":"-- 【共享专长库】存储全量可复用的专长、被动、天赋与特质规则。\\nCREATE TABLE sheet_zhuanchangku (\\n    row_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 行号: 自增物理主键\\n    feat_id TEXT NOT NULL UNIQUE, -- 专长编号: 业务唯一键,格式\'FEAT_XX\'(如 \'FEAT_09\')\\n    zhuan_chang_ming_cheng TEXT NOT NULL, -- 专长名称: 专长/天赋全名(如 \'警觉\'/\'爪刃大师\'/\'战地施法者\')\\n    xiao_guo_miao_shu TEXT NOT NULL, -- 效果描述: 完整机制条款/豁免优势/被动特性(严禁概括,须摘录完整规则)\\n    shu_xing_ti_sheng TEXT NOT NULL DEFAULT \'无\' -- 属性提升: 半专长属性加成(如 \'敏捷+1\'/\'体质+1\'/\'无\')\\n);","initNode":"/* 【初始化触发规则】开局单次执行或由角色创建脚本注入。按规范插入开局角色/种族自带的核心初始专长模板 */\\nINSERT INTO sheet_zhuanchangku (\\n    feat_id, zhuan_chang_ming_cheng, xiao_guo_miao_shu, shu_xing_ti_sheng\\n) VALUES (\\n    \'FEAT_01\',\\n    \'{初始专长/特质名称: 如 \\"警觉\\"}\',\\n    \'{完整效果规则: 如 \\"先攻检定获得+5加值; 只要处于清醒状态便不会被突袭; 隐形敌人对你的攻击不具有优势\\"}\',\\n    \'无\'\\n);","updateNode":"/* 严格禁止更新：专长库为底层规则底册，条目写入后永久只读。若专长进阶/蜕变请使用 insertNode 录入新专长条目 */","insertNode":"/* 【新增触发规则】当角色剧情觉醒天赋、特殊特质、或修炼、学习、感悟获取专长时执行。feat_id 严格按 \'FEAT_02\', \'FEAT_03\' 递增分配。\\n \\n ⛔ 严禁收录：临时状态（Buff/Debuff）、普通装备词条、日常肢体行为。\\n ✅ 准入条件：必须是或具有长期生效被动机制的独立天赋/被动能力。 */\\nINSERT INTO sheet_zhuanchangku (\\n    feat_id, zhuan_chang_ming_cheng, xiao_guo_miao_shu, shu_xing_ti_sheng\\n) VALUES (\\n    \'{递增编号: 如 FEAT_02}\',\\n    \'{专长/天赋全名}\',\\n    \'{详细机制规则条款、豁免优势及被动加成}\',\\n    \'{属性提升数值: 如 \\"体质+1\\" / \\"力量+1\\" / \\"无\\"}\'\\n);","deleteNode":"/* 【删除触发规则】仅当确认该专长已被彻底废弃、遗忘，且没有任何角色在角色专长关联（sheet_juesezhuanchangguanlian）中引用此 feat_id 时方可删除 */\\nDELETE FROM sheet_zhuanchangku \\nWHERE feat_id = \'{确认废弃且无关联的专长编号，如 FEAT_49}\';","ddl":"CREATE TABLE sheet_zhuanchangku (\\n  row_id INTEGER PRIMARY KEY,\\n  feat_id TEXT,\\n  zhuan_chang_ming_cheng TEXT, -- 专长名称\\n  xiao_guo_miao_shu TEXT, -- 效果描述\\n  shu_xing_ti_sheng TEXT -- 属性提升\\n);"},"content":[["row_id","feat_id","专长名称","效果描述","属性提升"]],"updateConfig":{"batchSize":1,"uiSentinel":-1,"groupId":1,"updateFrequency":-1},"exportConfig":{"enabled":false,"splitByRow":false,"entryName":"专长库","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"🏅 专长库-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","sqlInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991}},"orderNo":12},"sheet_juesezhuanchangguanlian":{"uid":"sheet_juesezhuanchangguanlian","name":"🔗 角色专长关联","sourceData":{"note":"-- 【角色专长关联表】建立角色与专长库的多对多映射，追踪专长获取等级与分支定制选项。\\nCREATE TABLE sheet_juesezhuanchangguanlian (\\n    row_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 行号: 自增物理主键\\n    feat_link_id TEXT NOT NULL UNIQUE, -- 关联编号: 业务唯一键,格式\'FLINK_XX\'(如 \'FLINK_01\')\\n    char_id TEXT NOT NULL, -- 角色编号: 主角固定为\'PC_MAIN\',同伴为\'ALLY_XX\'(如 \'PC_MAIN\'/\'ALLY_02\')\\n    feat_id TEXT NOT NULL, -- 专长编号: 关联专长库的 feat_id(如 \'FEAT_01\')\\n    huo_qu_deng_ji TEXT NOT NULL, -- 获取等级: 习得时的角色等级或途径(如 \'1级\'/\'4级\'/\'种族自带\')\\n    yi_xuan_ze_xiang TEXT NOT NULL DEFAULT \'无\', -- 已选择项: 专长分支定制项(如 \'体质豁免\'/\'火焰抗性\'/\'无\')\\n    bei_zhu TEXT -- 备注: 触发时机/来源背景/附加说明(如 \'向XX学习获得\'/\'在XX修炼获得\'/\'无\')\\n);","initNode":"/* 【初始化触发规则】开局单次执行或由角色创建脚本注入。为主角(PC_MAIN)及初始同伴绑定开局已拥有的专长与被动特质 */\\nINSERT INTO sheet_juesezhuanchangguanlian (\\n    feat_link_id, char_id, feat_id, huo_qu_deng_ji,\\n    yi_xuan_ze_xiang, bei_zhu\\n) VALUES (\\n    \'FLINK_01\',\\n    \'PC_MAIN\',\\n    \'FEAT_01\',\\n    \'1级\',\\n    \'无\',\\n    \'{初始专长获取背景，如: 种族特性 / 初始核心天赋}\'\\n);","updateNode":"/* 【更新触发规则】仅当专长附带的分支选项（如属性点重新分配、语言变更）或备注说明发生变化时按 feat_link_id 更新 */\\nUPDATE sheet_juesezhuanchangguanlian \\nSET \\n    yi_xuan_ze_xiang = \'{最新分支选项}\',\\n    bei_zhu = \'{最新机制备注}\'\\nWHERE feat_link_id = \'{目标关联编号，如 FLINK_01}\';","insertNode":"/* 【新增触发规则】当角色剧情觉醒天赋、特殊特质、或修炼、学习、感悟获取专长时执行。feat_link_id 严格按 \'FLINK_02\', \'FLINK_03\' 递增 */\\nINSERT INTO sheet_juesezhuanchangguanlian (\\n    feat_link_id, char_id, feat_id, huo_qu_deng_ji,\\n    yi_xuan_ze_xiang, bei_zhu\\n) VALUES (\\n    \'{递增编号: 如 FLINK_02}\',\\n    \'{获得专长的角色ID: PC_MAIN 或 ALLY_XX}\',\\n    \'{关联的专长编号: 如 FEAT_02}\',\\n    \'{当前角色等级或获取节点: 如 \\"4级\\"}\',\\n    \'{专长分支选择项: 如 \\"火焰流派法术增强\\" / \\"龙语\\" / \\"无\\"}\',\\n    \'{获取途径与机制备注}\'\\n);","deleteNode":"/* 严格禁止删除：已获得的专长与天赋属于永久角色资产，通常不可剥离。*/","ddl":"CREATE TABLE sheet_juesezhuanchangguanlian (\\n  row_id INTEGER PRIMARY KEY,\\n  feat_link_id TEXT,\\n  char_id TEXT,\\n  feat_id TEXT,\\n  huo_qu_deng_ji TEXT, -- 获取等级\\n  yi_xuan_ze_xiang TEXT, -- 已选择项\\n  bei_zhu TEXT -- 备注\\n);"},"content":[["row_id","feat_link_id","char_id","feat_id","获取等级","已选择项","备注"]],"updateConfig":{"batchSize":1,"uiSentinel":-1,"groupId":1,"updateFrequency":-1},"exportConfig":{"enabled":false,"splitByRow":false,"entryName":"角色专长","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"🔗 角色专长关联-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","sqlInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991}},"orderNo":13},"sheet_juesebiao":{"uid":"sheet_juesebiao","name":"👤 角色表","sourceData":{"note":"-- 【队伍角色档案表】记录主角与队伍核心成员的基础设定，通过 char_id 关联属性、资源与技能专长表。\\nCREATE TABLE sheet_juesebiao (\\n    row_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 行号: 自增物理主键\\n    char_id TEXT NOT NULL UNIQUE, -- 角色编号: 主角固定为\'PC_MAIN\',队友格式\'ALLY_XX\'(如 \'PC_MAIN\'/\'ALLY_01\')\\n    cheng_yuan_lei_xing TEXT NOT NULL CHECK (cheng_yuan_lei_xing IN (\'主角\',\'同伴\',\'召唤物\',\'随从\',\'向导\')), -- 成员类型\\n    xing_ming TEXT NOT NULL, -- 姓名: 角色全名(如 \'布鲁伊\'、\'艾琳娜\')\\n    zhong_zu_xing_bie_nian_ling TEXT NOT NULL, -- 基础信息: 种族/性别/年龄(如 \'阿戈尔-虹裔/雄/23\'、\'佩洛-狼裔-兽亲/雌/12\')\\n    zhi_ye TEXT NOT NULL, -- 职业: 职业名(如 \'游侠\'、\'圣武士\')\\n    wai_mao_miao_shu TEXT, -- 外貌描述: 详细体貌特征、种族特征与常态着装\\n    xing_ge_te_dian TEXT, -- 性格特点: 核心性格特质、理想、牵绊与缺点\\n    bei_jing_gu_shi TEXT, -- 背景故事: 角色身世与宿命(主角控制在500字内,队友控制在300字内)\\n    jia_ru_jie_dian TEXT NOT NULL DEFAULT \'无\' -- 加入节点: 主角填\'无\',队友填入队原因/契约动机/共同目标\\n);","initNode":"/* 【初始化触发规则】开局单次执行或由角色创建脚本注入：\\n 1. 必须创建主角行：char_id 锁定为 \'PC_MAIN\'，cheng_yuan_lei_xing 锁定为 \'主角\'，jia_ru_jie_dian 填 \'无\'；\\n 2. 若开局已有同行同伴，按 \'ALLY_01\' 同步插入初始队友行。 */\\nINSERT INTO sheet_juesebiao (\\n    char_id, cheng_yuan_lei_xing, xing_ming,\\n    zhong_zu_xing_bie_nian_ling, zhi_ye, wai_mao_miao_shu,\\n    xing_ge_te_dian, bei_jing_gu_shi, jia_ru_jie_dian\\n) VALUES \\n(\\n    \'PC_MAIN\',\\n    \'主角\',\\n    \'{主角姓名}\',\\n    \'{种族/性别/年龄}\',\\n    \'{初始职业: 如 游侠}\',\\n    \'{主角外貌细节描写}\',\\n    \'{特质/理想/牵绊/缺陷}\',\\n    \'{主角背景故事，≤500字}\',\\n    \'无\'\\n),\\n(\\n    \'ALLY_01\',\\n    \'同伴\',\\n    \'{初始同伴全名}\',\\n    \'{同伴种族/性别/年龄}\',\\n    \'{同伴职业: 如 守林人}\',\\n    \'{同伴外貌描写}\',\\n    \'{同伴性格特点}\',\\n    \'{同伴背景故事，≤300字}\',\\n    \'{开局同行/缔结契约的契机}\'\\n);","updateNode":"/* 【更新触发规则】满足以下任意条件时按 char_id 精确更新：\\n 1. 剧情蜕变：经历重大主线或解开心结后，追加/重写 bei_jing_gu_shi（主角≤500字，队友≤300字），但禁止把日常行为或普通任务加入 bei_jing_gu_shi\\n 2. 重大形态变化：情节明确出现变装/易容/形态转换（化形/魔法编辑生理外观等）时更新 wai_mao_miao_shu。 */\\nUPDATE sheet_juesebiao \\nSET \\n    wai_mao_miao_shu = \'{外貌或拟态形态变化时更新，禁止将受伤/淋湿/污泥/衣服破损等临时或细小的外貌表征加入更新，只有整体性、目的性的外表变更才记录更新}\',\\n    xing_ge_te_dian = \'{性格转变时更新，否则保持原值}\',\\n    bei_jing_gu_shi = \'{追加重大经历后的背景故事，禁止加入正在进行的普通任务描述}\',\\n    jia_ru_jie_dian = \'{目标动机演变时更新，否则保持原值}\'\\nWHERE char_id = \'{目标角色ID: PC_MAIN 或 ALLY_XX}\';","insertNode":"/* 【新增触发规则】\\n ⛔ 主角铁律：严格禁止插入新的主角行（PC_MAIN 仅限 1 行且已在初始化建立）。\\n ✅ 同伴准入：仅当剧情中 NPC 明确表达加入队伍的意愿，且被玩家明确接受（或缔结契约/召唤随从），或玩家提出请求， NPC 同意后，方可添加。\\n 编号严格按 \'ALLY_01\', \'ALLY_02\', \'ALLY_03\' 递增分配。 */\\nINSERT INTO sheet_juesebiao (\\n    char_id, cheng_yuan_lei_xing, xing_ming,\\n    zhong_zu_xing_bie_nian_ling, zhi_ye, wai_mao_miao_shu,\\n    xing_ge_te_dian, bei_jing_gu_shi, jia_ru_jie_dian\\n) VALUES (\\n    \'{递增编号: 如 ALLY_02}\',\\n    \'{同伴 | 召唤物 | 随从 | 向导}\',\\n    \'{新加入角色全名}\',\\n    \'{种族/性别/年龄}\',\\n    \'{职业: 如 塑能法师}\',\\n    \'{外貌体征描述}\',\\n    \'{性格/理想/缺陷}\',\\n    \'{角色生平背景，≤300字}\',\\n    \'{加入队伍的具体事件节点与核心契约目的}\'\\n);","deleteNode":"/* 【删除触发规则】\\n ⛔ 主角禁止：严格禁止删除 char_id = \'PC_MAIN\'。\\n ✅ 队友出队：仅当队友永久离队、彻底死亡、或反目背叛成为敌对头目时，执行物理删除（同时清理对应属性与资源表数据）。 */\\nDELETE FROM sheet_juesebiao \\nWHERE char_id = \'{永久离队或死亡的队友ID，如 ALLY_01}\' \\n  AND char_id != \'PC_MAIN\';","ddl":"CREATE TABLE sheet_juesebiao (\\n  row_id INTEGER PRIMARY KEY,\\n  char_id TEXT,\\n  cheng_yuan_lei_xing TEXT, -- 成员类型\\n  xing_ming TEXT, -- 姓名\\n  zhong_zu_xing_bie_nian_ling TEXT, -- 种族/性别/年龄\\n  zhi_ye TEXT, -- 职业\\n  wai_mao_miao_shu TEXT, -- 外貌描述\\n  xing_ge_te_dian TEXT, -- 性格特点\\n  bei_jing_gu_shi TEXT, -- 背景故事\\n  jia_ru_jie_dian TEXT -- 加入节点\\n);"},"content":[["row_id","char_id","成员类型","姓名","种族/性别/年龄","职业","外貌描述","性格特点","背景故事","加入节点"]],"updateConfig":{"batchSize":1,"uiSentinel":-1,"groupId":1,"updateFrequency":-1},"exportConfig":{"enabled":true,"splitByRow":true,"entryName":"角色信息","entryType":"constant","keywords":"","preventRecursion":false,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"👤 角色表-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","sqlInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10100},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991}},"orderNo":14},"sheet_jueseshuxing":{"uid":"sheet_jueseshuxing","name":"📊 角色属性","sourceData":{"note":"-- 【角色战斗属性表】记录主角与队友的六维属性、生命值、AC与DND5E熟练项数据。\\nCREATE TABLE sheet_jueseshuxing (\\n    row_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 行号: 自增物理主键\\n    char_id TEXT NOT NULL UNIQUE, -- 角色编号: 关联角色表的外键(如 \'PC_MAIN\'/\'ALLY_02\')\\n    deng_ji INTEGER NOT NULL DEFAULT 1, -- 等级: 角色总等级,纯整数(如 2, 3, 5)\\n    hp TEXT NOT NULL, -- HP: 格式\'当前HP/最大HP\'(如 \'45/52\')\\n    ac INTEGER NOT NULL, -- AC: DND5E护甲等级数值,纯整数(如 15, 18)\\n    xian_gong_jia_zhi TEXT NOT NULL, -- 先攻加值: 敏捷调整值+专长加值,带正负号(如 \'+3\'/\'+0\'/\'-1\')\\n    su_du TEXT NOT NULL DEFAULT \'30尺(6格)\', -- 速度: 常态移动力与战术格数(如 \'30尺(6格)\'/\'40尺(8格)\')\\n    shu_xing_zhi TEXT NOT NULL, -- 属性值: 六维标准JSON格式(如 \'{\\"STR\\":16,\\"DEX\\":14,\\"CON\\":14,\\"INT\\":10,\\"WIS\\":12,\\"CHA\\":8}\')\\n    huo_mian_shu_lian TEXT NOT NULL, -- 豁免熟练: 职业豁免JSON数组(如 \'[\\"力量\\",\\"体质\\"]\'/\'[\\"敏捷\\",\\"智力\\"]\')\\n    ji_neng_shu_lian TEXT NOT NULL, -- 技能熟练: 熟练技能JSON数组(如 \'[\\"运动\\",\\"威吓\\",\\"隐匿\\"]\')\\n    bei_dong_gan_zhi INTEGER NOT NULL, -- 被动感知: 防暗哨伏击基准值\'10+感知调整值(+熟练)\'(如 13)\\n    jing_yan_zhi TEXT NOT NULL DEFAULT \'0/300\' -- 经验值: 格式\'当前EXP/升级所需\'(如 \'6500/14000\')\\n);","initNode":"/* 【初始化触发规则】开局单次执行或由角色创建脚本注入。按 DND 5E 规则计算并插入主角(PC_MAIN)与初始队友的完整属性 */\\nINSERT INTO sheet_jueseshuxing (\\n    char_id, deng_ji, hp, ac, xian_gong_jia_zhi,\\n    su_du, shu_xing_zhi, huo_mian_shu_lian,\\n    ji_neng_shu_lian, bei_dong_gan_zhi, jing_yan_zhi\\n) VALUES \\n(\\n    \'PC_MAIN\',\\n    1,\\n    \'{初始当前HP/最大HP，如: 12/12}\',\\n    15, -- {初始AC}\\n    \'+2\', -- {初始敏捷加值}\\n    \'30尺(6格)\',\\n    \'{\\"STR\\":14,\\"DEX\\":15,\\"CON\\":14,\\"INT\\":10,\\"WIS\\":12,\\"CHA\\":8}\',\\n    \'[\\"力量\\",\\"体质\\"]\',\\n    \'[\\"运动\\",\\"隐匿\\",\\"察觉\\"]\',\\n    13, -- {10 + WIS调整值(+1) + 察觉熟练(+2)}\\n    \'0/300\'\\n),\\n(\\n    \'ALLY_01\',\\n    3,\\n    \'{同伴当前HP/最大HP，如: 28/28}\',\\n    14,\\n    \'+3\',\\n    \'35尺(7格)\',\\n    \'{\\"STR\\":12,\\"DEX\\":16,\\"CON\\":14,\\"INT\\":10,\\"WIS\\":14,\\"CHA\\":10}\',\\n    \'[\\"力量\\",\\"敏捷\\"]\',\\n    \'[\\"求生\\",\\"察觉\\",\\"隐匿\\",\\"驯养\\"]\',\\n    14,\\n    \'0/2700\'\\n);","updateNode":"/* 【更新触发规则】满足以下条件时按 char_id 精确更新：\\n 1. 战斗伤害/治疗：受伤扣除、治疗恢复时刷新 hp。\\n 2. 装备变动：穿脱护甲/盾牌、获得敏捷提升时重新核算并更新 ac 与 xian_gong_jia_zhi。\\n 3. 【经验结算铁律】：正文完成战斗/委托获得 EXP 时，立即在当前轮次累加至 jing_yan_zhi（全队同等获取）。正文未明确提及获取经验值时严禁自主增加！\\n 4. 【等级卡上限铁律】：AI 严禁私自修改 deng_ji 升级！当经验值达到上限时，必须将其【保持在上限制】（如 \'900/900\'），升级由升级脚本与玩家分配属性后触发。 */\\nUPDATE sheet_jueseshuxing \\nSET \\n    hp = \'{最新当前HP/最大HP，如: 32/52}\',\\n    ac = {最新AC数值},\\n    xian_gong_jia_zhi = \'{最新先攻加值}\',\\n    su_du = \'{速度发生变化时更新，否则保持原值}\',\\n    shu_xing_zhi = \'{属性变更时更新JSON，否则保持原值}\',\\n    huo_mian_shu_lian = \'{豁免熟练JSON}\',\\n    ji_neng_shu_lian = \'{技能熟练JSON}\',\\n    bei_dong_gan_zhi = {最新被动感知整数},\\n    jing_yan_zhi = \'{最新经验值: 如 650/900，达标时锁死上限}\'\\nWHERE char_id = \'{目标角色ID: PC_MAIN 或 ALLY_XX}\';","insertNode":"/* 【新增触发规则】当新同伴正式入队（角色表插入 ALLY_XX）时，同步在此表插入其对应的完整战斗属性行 */\\nINSERT INTO sheet_jueseshuxing (\\n    char_id, deng_ji, hp, ac, xian_gong_jia_zhi,\\n    su_du, shu_xing_zhi, huo_mian_shu_lian,\\n    ji_neng_shu_lian, bei_dong_gan_zhi, jing_yan_zhi\\n) VALUES (\\n    \'{新角色ID: 如 ALLY_02}\',\\n    {初始等级: 整数},\\n    \'{当前HP/最大HP}\',\\n    {AC数值: 整数},\\n    \'{先攻加值: 如 \\"+2\\"}\',\\n    \'{移动速度: 如 \\"30尺(6格)\\"}\',\\n    \'{六维属性JSON: {\\"STR\\":X,\\"DEX\\":X,\\"CON\\":X,\\"INT\\":X,\\"WIS\\":X,\\"CHA\\":X}}\',\\n    \'{豁免熟练JSON数组: 如 [\\"智力\\",\\"感知\\"]}\',\\n    \'{技能熟练JSON数组: 如 [\\"奥秘\\",\\"历史\\"]}\',\\n    {被动感知数值: 整数},\\n    \'{经验值: 当前/升级所需}\'\\n);","deleteNode":"/* 【删除触发规则】\\n ⛔ 主角禁止：严格禁止删除 char_id = \'PC_MAIN\'。\\n ✅ 队友出队：当同伴离队、死亡并在角色表中被注销时，同步删除其对应的属性行。 */\\nDELETE FROM sheet_jueseshuxing \\nWHERE char_id = \'{离队或注销的队友ID，如 ALLY_01}\' \\n  AND char_id != \'PC_MAIN\';","ddl":"CREATE TABLE sheet_jueseshuxing (\\n  row_id INTEGER PRIMARY KEY,\\n  char_id TEXT,\\n  deng_ji TEXT, -- 等级\\n  hp TEXT, -- HP\\n  ac TEXT, -- AC\\n  xian_gong_jia_zhi TEXT, -- 先攻加值\\n  su_du TEXT, -- 速度\\n  shu_xing_zhi TEXT, -- 属性值\\n  huo_mian_shu_lian TEXT, -- 豁免熟练\\n  ji_neng_shu_lian TEXT, -- 技能熟练\\n  bei_dong_gan_zhi TEXT, -- 被动感知\\n  jing_yan_zhi TEXT -- 经验值\\n);"},"content":[["row_id","char_id","等级","HP","AC","先攻加值","速度","属性值","豁免熟练","技能熟练","被动感知","经验值"]],"updateConfig":{"batchSize":1,"uiSentinel":-1,"groupId":1},"exportConfig":{"enabled":true,"splitByRow":false,"entryName":"TavernDB-ACU-CustomExport-角色属性","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"📊 角色属性-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","sqlInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10200},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991}},"orderNo":15},"sheet_jueseziyuan":{"uid":"sheet_jueseziyuan","name":"⚡ 角色资源","sourceData":{"note":"-- 【角色资源管理表】记录主角与队友的可消耗资源池（法术位、职业资源、生命骰、特殊能力次数与金币）。\\nCREATE TABLE sheet_jueseziyuan (\\n    row_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 行号: 自增物理主键\\n    char_id TEXT NOT NULL UNIQUE, -- 角色编号: 关联角色表的外键(如 \'PC_MAIN\'/\'ALLY_01\')\\n    fa_shu_wei TEXT NOT NULL DEFAULT \'无\', -- 法术位: JSON格式\'{\\"1环\\":\\"当前/最大\\",\\"2环\\":\\"当前/最大\\"}\'(非法术职业填\'无\')\\n    zhi_ye_zi_yuan TEXT NOT NULL DEFAULT \'无\', -- 职业资源: 动作潮涌/战术点/狂暴等JSON(如 \'{\\"动作潮涌\\":\\"1/1\\",\\"战术点\\":\\"3/3\\"}\'/\'无\')\\n    sheng_ming_tou TEXT NOT NULL, -- 生命骰: 短休恢复HP用,格式\'当前/最大\'(如 \'3/5\'/\'1/1\')\\n    te_shu_neng_li TEXT NOT NULL DEFAULT \'无\', -- 特殊能力: 种族/专属能力次数JSON(如 \'{\\"秘法充能\\":\\"2/3\\"}\'/\'无\')\\n    jin_bi INTEGER NOT NULL DEFAULT 0 -- 金币: 个人持有G金币总数,纯整数(如 120)\\n);","initNode":"/* 【初始化触发规则】开局单次执行或由角色创建脚本注入。根据职业、等级与种族初始化主角(PC_MAIN)与初始队友的满额资源池 */\\nINSERT INTO sheet_jueseziyuan (\\n    char_id, fa_shu_wei, zhi_ye_zi_yuan, sheng_ming_tou,\\n    te_shu_neng_li, jin_bi\\n) VALUES \\n(\\n    \'PC_MAIN\',\\n    \'无\', -- {施法职业填 JSON 如 \'{\\"1环\\":\\"2/2\\"}\'，非施法填 \'无\'}\\n    \'无\', -- {初始职业资源 JSON 如 \'{\\"敌人侦测\\":\\"3/3\\"}\'}\\n    \'1/1\', -- {生命骰：等级数/等级数}\\n    \'{\\"龙语咆哮\\":\\"3/3\\"}\', -- {主角专属特有能力次数}\\n    15 -- {开局初始金币G}\\n),\\n(\\n    \'ALLY_01\',\\n    \'无\',\\n    \'{\\"荒野直觉\\":\\"2/2\\"}\',\\n    \'3/3\',\\n    \'无\',\\n    5\\n);","updateNode":"/* 【更新触发规则】满足以下任意消耗/休整事件时按 char_id 精确更新：\\n 1. 施法/放技能消耗：扣减对应环阶 fa_shu_wei、zhi_ye_zi_yuan 或 te_shu_neng_li 的当前次数。\\n 2. 【短休(Short Rest)结算】：\\n    - 可消耗若干枚 sheng_ming_tou 投骰恢复 HP（扣减生命骰）；\\n    - 恢复所有“短休恢复”的职业资源（如邪术师法术位、武僧气点、战士动作潮涌/再战）。\\n 3. 【长休(Long Rest)结算】：\\n    - 完全回满所有 fa_shu_wei、zhi_ye_zi_yuan 与 te_shu_neng_li；\\n    - 恢复至多相当于最大生命骰一半数量的 sheng_ming_tou（最少恢复1枚）。\\n 4. 交易/搜刮：金币增减时直接计算最新整数刷新 jin_bi。 */\\nUPDATE sheet_jueseziyuan \\nSET \\n    fa_shu_wei = \'{最新法术位JSON或保持原值}\',\\n    zhi_ye_zi_yuan = \'{最新职业资源JSON或保持原值}\',\\n    sheng_ming_tou = \'{最新生命骰: 如 2/5}\',\\n    te_shu_neng_li = \'{最新特殊能力JSON或保持原值}\',\\n    jin_bi = {最新金币整数值}\\nWHERE char_id = \'{目标角色ID: PC_MAIN 或 ALLY_XX}\';","insertNode":"/* 【新增触发规则】当新角色入队（角色表插入 ALLY_XX）时，同步在此表为其分配初始满额的法术位、生命骰与资源行 */\\nINSERT INTO sheet_jueseziyuan (\\n    char_id, fa_shu_wei, zhi_ye_zi_yuan, sheng_ming_tou,\\n    te_shu_neng_li, jin_bi\\n) VALUES (\\n    \'{新角色ID: 如 ALLY_02}\',\\n    \'{法术位JSON: 如 {\\"1环\\":\\"4/4\\",\\"2环\\":\\"2/2\\"} 或 \\"无\\"}\',\\n    \'{职业资源JSON: 如 {\\"气点\\":\\"4/4\\"} 或 \\"无\\"}\',\\n    \'{生命骰: 如 \\"4/4\\"}\',\\n    \'{种族/专属特技次数JSON 或 \\"无\\"}\',\\n    {初始随身携带金币: 纯整数}\\n);","deleteNode":"/* 【删除触发规则】\\n ⛔ 主角禁止：严格禁止删除 char_id = \'PC_MAIN\'。\\n ✅ 队友出队：当同伴离队、死亡并在角色表中注销时，同步删除其资源行。 */\\nDELETE FROM sheet_jueseziyuan \\nWHERE char_id = \'{离队或注销的队友ID，如 ALLY_01}\' \\n  AND char_id != \'PC_MAIN\';","ddl":"CREATE TABLE sheet_jueseziyuan (\\n  row_id INTEGER PRIMARY KEY,\\n  char_id TEXT,\\n  fa_shu_wei TEXT, -- 法术位\\n  zhi_ye_zi_yuan TEXT, -- 职业资源\\n  sheng_ming_tou TEXT, -- 生命骰\\n  te_shu_neng_li TEXT, -- 特殊能力\\n  jin_bi TEXT -- 金币\\n);"},"content":[["row_id","char_id","法术位","职业资源","生命骰","特殊能力","金币"]],"updateConfig":{"batchSize":1,"uiSentinel":-1,"groupId":1,"updateFrequency":-1},"exportConfig":{"enabled":true,"splitByRow":false,"entryName":"TavernDB-ACU-CustomExport-角色资源","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"⚡ 角色资源-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","sqlInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10300},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991}},"orderNo":16},"sheet_tansuoditushuju":{"uid":"sheet_tansuoditushuju","name":"🗺️ 探索地图数据","sourceData":{"note":"","initNode":"","updateNode":"","insertNode":"","deleteNode":"","ddl":"CREATE TABLE sheet_tansuoditushuju (\\n  row_id INTEGER PRIMARY KEY,\\n  locationname TEXT, -- LocationName\\n  mapstructurejson TEXT, -- MapStructureJSON\\n  lastupdated TEXT, -- LastUpdated\\n  dang_qian_xian_shi_di_tu TEXT -- 当前显示地图\\n);"},"content":[["row_id","LocationName","MapStructureJSON","LastUpdated","当前显示地图"]],"updateConfig":{"batchSize":3,"uiSentinel":-1,"groupId":3,"updateFrequency":0,"skipFloors":200},"exportConfig":{"enabled":false,"splitByRow":false,"entryName":"探索地图数据","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"🗺️ 探索地图数据-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","sqlInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991},"injectIntoWorldbook":false},"orderNo":17},"sheet_zhandoudituhuizhi":{"uid":"sheet_zhandoudituhuizhi","name":"🖌️ 战斗地图绘制","sourceData":{"note":"【战斗地图视觉表】存储战斗场景的视觉结构数据，用于生成底图。与COMBAT_BattleMap配合，后者存逻辑(墙/怪)，此表存视觉(地面/装饰)。\\n\\n| 列名 | 类型 | 说明 |\\n|------|------|------|\\n| SceneName | pk | 场景名称，通常对应全局状态的“当前场景” |\\n| VisualJSON | text | 视觉结构数据(JSON)，包含地面材质、装饰物等 |\\n| GridSize | string | 网格尺寸，格式: 20x20 |\\n| LastUpdated | datetime | 最后更新时间 |\\n\\n【VisualJSON结构定义】\\n{\\n  \\"mapName\\": \\"场景名\\",\\n  \\"dimensions\\": { \\"width\\": 20, \\"height\\": 20 },\\n  \\"ground\\": \\"grass/stone/wood_plank/water/lava/snow...\\",\\n  \\"terrain_objects\\": [\\n    {\\n      \\"type\\": \\"tree/rock/wall/pillar/water_pool/furniture/rubble...\\",\\n      \\"x\\": 1, \\"y\\": 1, \\"w\\": 1, \\"h\\": 1,\\n      \\"rotation\\": 0,\\n      \\"description\\": \\"描述\\",\\n      \\"tactical\\": \\"cover/block/difficult\\"\\n    }\\n  ]\\n}","initNode":"【初始化】无需预填。","updateNode":"【触发条件】当战斗场景的环境发生重大视觉变化时更新。","insertNode":"【触发条件】当进入一场战斗，且该场景尚未在此表中存在记录时，根据正文剧情的环境描述生成视觉数据。\\n操作指南：\\n1. 提取剧情中的环境要素（如：酒馆地板是木质的，角落有翻倒的桌子）。\\n2. 生成符合JSON格式的VisualJSON。\\n3. GridSize 默认为 20x20，除非剧情暗示了极小或极大的空间。\\n4. 这是生成地图底图的关键依据。","deleteNode":"【触发条件】场景不再需要或地图数据过旧时删除。","ddl":"CREATE TABLE sheet_zhandoudituhuizhi (\\n  row_id INTEGER PRIMARY KEY,\\n  scenename TEXT, -- SceneName\\n  visualjson TEXT, -- VisualJSON\\n  gridsize TEXT, -- GridSize\\n  lastupdated TEXT -- LastUpdated\\n);"},"content":[["row_id","SceneName","VisualJSON","GridSize","LastUpdated"]],"updateConfig":{"batchSize":3,"uiSentinel":-1,"groupId":3,"updateFrequency":-1},"exportConfig":{"enabled":false,"splitByRow":false,"entryName":"战斗绘制","entryType":"constant","keywords":"","preventRecursion":true,"injectionTemplate":"","extraIndexEnabled":false,"extraIndexEntryName":"🖌️ 战斗地图绘制-索引","extraIndexColumns":[],"extraIndexColumnModes":{},"extraIndexInjectionTemplate":"","sqlInjectionTemplate":"","entryPlacement":{"position":"at_depth_as_system","depth":2,"order":10000},"extraIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":10010},"fixedEntryPlacement":{"position":"at_depth_as_system","depth":2,"order":99990},"fixedIndexPlacement":{"position":"at_depth_as_system","depth":2,"order":99991},"injectIntoWorldbook":false},"orderNo":18}}');
 ;// ./src/config/EmbeddedTemplate.js
 // src/config/EmbeddedTemplate.js
 
 
-const EMBEDDED_TEMPLATE = DND_namespaceObject;
+const EMBEDDED_TEMPLATE = DND5E_SQL_9_20_namespaceObject;
 
 ;// ./src/features/TemplateSync.js
 // src/features/TemplateSync.js
@@ -34612,7 +34932,7 @@ const TemplateSync = {
     manualImport: async (options = {}) => {
         try {
             const currentVersion = CONFIG.TEMPLATE_SYNC.CURRENT_VERSION;
-            const { getDB } = getCore();
+            const { getDB } = Utils_getCore();
             const api = getDB();
 
             const {
@@ -34669,7 +34989,7 @@ const TemplateSync = {
             }
 
             // 检查 API 是否可用
-            const { getDB } = getCore();
+            const { getDB } = Utils_getCore();
             const api = getDB();
             if (!api || !api.importTemplateFromData) {
                 Logger.warn('[TemplateSync] 数据库 API 不可用或不支持 importTemplateFromData，跳过模板同步');
@@ -34739,7 +35059,7 @@ const TemplateSync = {
             Logger.info(`[TemplateSync] 内置模板准备完成，包含 ${sheetCount} 个表格`);
 
             // 调用数据库 API 导入模板
-            const { getDB } = getCore();
+            const { getDB } = Utils_getCore();
             const api = getDB();
             let result = await api.importTemplateFromData(templateData, importOptions);
 
@@ -34975,7 +35295,7 @@ const removeLocalAvatarKey = (key) => {
 
     // 异步加载头像
     async loadAvatarAsync(avatarIdentity, elemId, fallbackName = '') {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const base64 = await this.avatarStorage.get(avatarIdentity, fallbackName);
         if (base64) {
             const $el = $(`#${elemId}`);
@@ -35016,7 +35336,7 @@ const removeLocalAvatarKey = (key) => {
 
     // 显示头像上传对话框
     showAvatarUploadDialog(avatarIdentity, charName) {
-        const { $, window: coreWin } = getCore();
+        const { $, window: coreWin } = Utils_getCore();
         const avatarInfo = this.resolveAvatarStorageKeys(avatarIdentity, charName);
         const displayName = charName || avatarInfo.displayName;
         
@@ -35195,7 +35515,7 @@ const removeLocalAvatarKey = (key) => {
     
     // 刷新页面上指定角色的所有头像
     refreshAvatars(avatarIdentity, fallbackName = '') {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const avatarInfo = this.resolveAvatarStorageKeys(avatarIdentity, fallbackName);
 
         this.avatarStorage.get(avatarIdentity, fallbackName).then(storedAvatar => {
@@ -35235,7 +35555,7 @@ const removeLocalAvatarKey = (key) => {
     
     showCharacterCard(char, clickEvent) {
         Logger.info('[UIRenderer] showCharacterCard called for:', char ? char['姓名'] : 'Unknown');
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         let $card = $('#dnd-char-detail-card-el');
         
         // 记录点击位置（如果有事件对象）
@@ -35314,11 +35634,11 @@ const removeLocalAvatarKey = (key) => {
         const feats = charId ? DataManager.getCharacterFeats(charId) : [];
         
         // 获取资源
-        const pcRes = DataManager.getTable('PC_Resources');
-        const memRes = DataManager.getTable('PARTY_Resources');
+        const resTable = DataManager.getTable('CHARACTER_Resources');
         let res = {};
-        if (char['type'] === 'PC' && pcRes) res = pcRes[0] || {};
-        else if (memRes) res = memRes.find(r => r['CHAR_ID'] === charId) || {};
+        if (resTable) {
+            res = resTable.find(r => (r['char_id'] || r['CHAR_ID'] || r['角色ID']) === charId) || {};
+        }
         
         // 构建 HTML
         const avatarIdentity = char;
@@ -35440,7 +35760,7 @@ const removeLocalAvatarKey = (key) => {
         }
 
         // ========== 智能定位逻辑 ==========
-        const { window: coreWin } = getCore();
+        const { window: coreWin } = Utils_getCore();
         const $w = $(coreWin);
         const winW = $w.width();
         const winH = $w.height();
@@ -35512,7 +35832,7 @@ const removeLocalAvatarKey = (key) => {
         console.log('[DND Dashboard] handleSkillClick', idx);
         if (event) { event.stopPropagation(); event.preventDefault(); }
         
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const $card = $('#dnd-char-detail-card-el');
         const charId = $card.data('charId');
         
@@ -35549,7 +35869,7 @@ const removeLocalAvatarKey = (key) => {
         console.log('[DND Dashboard] handleFeatClick', idx);
         if (event) { event.stopPropagation(); event.preventDefault(); }
         
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const $card = $('#dnd-char-detail-card-el');
         const charId = $card.data('charId');
         
@@ -35579,9 +35899,22 @@ const removeLocalAvatarKey = (key) => {
     _charCreatorState: null,
     _charCreatorLoading: false,
 
+    
+
+    // [新增] 根据所选世界书解析应注入的世界书内容
+    // - '__auto__'（默认）: 当前酒馆启用的全部世界书
+    // - 具体名称: 仅读取指定的世界书
+    // - '' / null: 不使用世界书
+    async resolveCreatorWorldInfo(selectedWorldbook) {
+        const sel = (selectedWorldbook === undefined || selectedWorldbook === null) ? '__auto__' : selectedWorldbook;
+        if (sel === '__auto__') return await TavernAPI.getEnabledWorldInfo();
+        if (sel) return await TavernAPI.getEnabledWorldInfo(sel);
+        return '';
+    },
+
     // [新增] 启动升级流程
     async startLevelUp(charId) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         
         // 1. 获取角色数据
         const party = DataManager.getPartyData();
@@ -35597,12 +35930,15 @@ const removeLocalAvatarKey = (key) => {
         const feats = DataManager.getCharacterFeats(charId);
         const stats = DataManager.parseValue(char['属性值'], 'stats') || {};
         
-        // 简化的数据重构
+        //change 简化的数据重构
         const currentData = {
             name: char['姓名'],
             race_gender_age: char['种族/性别/年龄'],
             class: char['职业'],
             level: parseInt(char['等级']) || 1,
+            appearance: char['外貌描述'] || '',
+            personality: char['性格特点'] || '',
+            backstory: char['背景故事'] || '',
             stats: stats,
             hp: char['HP'],
             xp: char['经验值'],
@@ -35615,12 +35951,22 @@ const removeLocalAvatarKey = (key) => {
                 name: f['专长名称'],
                 desc: f['效果描述']
             })),
-            background: char['背景故事']
+            background: char['背景故事'],
+            resources: {
+                spell_slots: DataManager.parseValue(char['法术位'], 'resources') || {},
+                class_resources: DataManager.parseValue(char['职业资源'], 'resources') || {},
+                hit_dice: char['生命骰'] || `${parseInt(char['等级']) || 1}d8`
+            }
         };
         
         // 3. 初始化状态
-        // [新增] 获取启用的世界书内容，用于自定义世界观支持
-        const worldInfo = await TavernAPI.getEnabledWorldInfo();
+        // [新增] 获取世界书内容，用于自定义世界观支持（选择可配置：默认全部 / 指定世界书 / 不使用）
+        const availableWorldbooks = await TavernAPI.getAllWorldbookNames();
+        // [修复] 不再硬编码世界书名：优先沿用上次的选择，否则默认"当前启用的全部世界书"
+        const selectedWorldbook = (this._charCreatorState && this._charCreatorState.selectedWorldbook !== undefined)
+            ? this._charCreatorState.selectedWorldbook
+            : ((availableWorldbooks && availableWorldbooks.length > 0) ? '__auto__' : '');
+        const worldInfo = await this.resolveCreatorWorldInfo(selectedWorldbook);
 
         this._charCreatorState = {
             mode: 'levelup', // 标记为升级模式
@@ -35632,15 +35978,17 @@ const removeLocalAvatarKey = (key) => {
             isGenerating: false,
             currentStep: 'chatting', // 直接进入对话
             characterType: 'pc', // 默认为 PC，实际上会更新现有角色
+            selectedWorldbook: selectedWorldbook, // [新增] 参考世界书选择
+            availableWorldbooks: availableWorldbooks, // [新增] 可选世界书列表
             worldInfo: worldInfo, // 保存世界书内容
-            useWorldInfo: true // 默认开启世界书参考
+            useWorldInfo: !!selectedWorldbook // 世界书参考开关（跟随选择）
         };
         
         // 4. 切换面板并确保显示
         const mainUI = (typeof this.renderPanel === 'function') ? this : window.DND_Dashboard_UI;
         if (mainUI) {
             // [Fix] 先更新侧边栏选中状态，防止 setState('full') 自动渲染回 party tab
-            const { $ } = getCore();
+            const { $ } = Utils_getCore();
             $('.dnd-nav-item').removeClass('active');
             $('.dnd-nav-item[data-target="create"]').addClass('active');
 
@@ -35699,7 +36047,7 @@ const removeLocalAvatarKey = (key) => {
     },
 
     renderCharacterCreationPanel($container) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         
         // 获取 API 预设列表
         const presets = TavernAPI.getPresets();
@@ -35726,12 +36074,15 @@ const removeLocalAvatarKey = (key) => {
                     } catch(e) { console.error('[DND Creator] 状态解析失败', e); }
                 }
 
-                // 如果仍未初始化 (无存档或解析失败)，则使用默认值
+                // 【修复】获取最新的全部世界书列表
+                const allWorldbooks = await TavernAPI.getAllWorldbookNames();
+                const defaultWb = (allWorldbooks && allWorldbooks.length > 0) ? '__auto__' : '';
+
                 if (!this._charCreatorState) {
                     let apiConfig = { provider: 'plugin', url: '', key: '', model: '' };
-                    
-                    // [新增] 获取世界书内容
-                    const worldInfo = await TavernAPI.getEnabledWorldInfo();
+                    // [修复] 不再硬编码世界书名：默认"当前启用的全部世界书"（无世界书时回退为不使用）
+                    const selectedWorldbook = defaultWb;
+                    const worldInfo = await this.resolveCreatorWorldInfo(selectedWorldbook);
 
                     this._charCreatorState = {
                         selectedPresetId: null,
@@ -35742,10 +36093,19 @@ const removeLocalAvatarKey = (key) => {
                         isGenerating: false,
                         currentStep: 'init',
                         characterType: 'pc',
+                        selectedWorldbook: selectedWorldbook, // [新增] 参考世界书选择
+                        availableWorldbooks: allWorldbooks, // [新增] 可选世界书列表
                         worldInfo: worldInfo,
-                        useWorldInfo: true
+                        useWorldInfo: !!selectedWorldbook
                     };
-                    
+                } else {
+                    // [修复] 恢复会话时同步世界书列表与选择，并按当前选择刷新世界书内容
+                    this._charCreatorState.availableWorldbooks = allWorldbooks;
+                    if (this._charCreatorState.selectedWorldbook === undefined) {
+                        this._charCreatorState.selectedWorldbook = defaultWb;
+                    }
+                    this._charCreatorState.worldInfo = await this.resolveCreatorWorldInfo(this._charCreatorState.selectedWorldbook);
+                    this._charCreatorState.useWorldInfo = !!this._charCreatorState.selectedWorldbook;
                 }
 
                 // 无论是恢复会话还是全新开始，都强制同步一次最新的全局 API 配置
@@ -35873,10 +36233,14 @@ const removeLocalAvatarKey = (key) => {
                                 Model: ${state.apiConfig.model || '未设置'}
                             </div>
                             
-                            <!-- 世界书开关 -->
-                            <div style="margin-bottom:8px; display:flex; align-items:center; gap:5px;">
-                                <input type="checkbox" id="dnd-creator-use-worldinfo" ${state.useWorldInfo !== false ? 'checked' : ''} style="cursor:pointer;">
-                                <label for="dnd-creator-use-worldinfo" style="font-size:12px; color:#ccc; cursor:pointer;" title="开启后，升级/创建时将参考当前启用的世界书内容">📚 参考启用世界书</label>
+                            <!-- 世界书选择下拉列表 -->
+                            <div style="margin-bottom:8px; display:flex; flex-direction:column; gap:4px;">
+                                <label style="font-size:12px; color:#888; display:flex; align-items:center; gap:5px;"><i class="fa-solid fa-book"></i> 参考世界书</label>
+                                <select id="dnd-creator-worldinfo-select" style="width:100%; padding:6px 8px; background:#1a1a1c; border:1px solid var(--dnd-border-inner); color:#ccc; border-radius:4px; font-size:12px;">
+                                    <option value="" ${!state.selectedWorldbook ? 'selected' : ''}>-- 不使用世界书 --</option>
+                                    <option value="__auto__" ${state.selectedWorldbook === '__auto__' ? 'selected' : ''}>📚 [默认] 当前启用的全部世界书</option>
+                                    ${(state.availableWorldbooks || []).map(b => `<option value="${b}" ${state.selectedWorldbook === b ? 'selected' : ''}>📖 ${b}</option>`).join('')}
+                                </select>
                             </div>
 
                             <button type="button" onclick="window.DND_Dashboard_UI.renderPanel('settings')" class="dnd-clickable" style="width:100%;padding:6px;background:#2a2a2c;border:1px solid #555;color:#ccc;border-radius:4px;cursor:pointer;font-size:12px;">
@@ -36074,13 +36438,13 @@ const removeLocalAvatarKey = (key) => {
         for(let i=0; i<6; i++) results.push(roll4d6k3());
         
         const resultStr = results.join(', ');
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         $('#dnd-stats-roll-result').text(`[${resultStr}]`);
         $('#dnd-btn-use-roll').prop('disabled', false).attr('data-results', resultStr);
     },
 
     confirmStatsRoll() {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const res = $('#dnd-btn-use-roll').attr('data-results');
         if (res) {
             this.fillCreatorInput(`我选择使用【骰子投掷结果】：[${res}]。请帮我分配到合适的属性上。`);
@@ -36089,7 +36453,7 @@ const removeLocalAvatarKey = (key) => {
     },
 
     fillCreatorInput(text) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const $input = $('#dnd-creator-user-input');
         const current = $input.val();
         $input.val(current ? current + ' ' + text : text).focus();
@@ -36210,19 +36574,22 @@ const removeLocalAvatarKey = (key) => {
 
     // 绑定角色创建器事件
     bindCharacterCreatorEvents($container) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
+        const self = this; // 【关键修复】捕获 this
         const state = this._charCreatorState;
         
-        // 世界书开关
-        $container.find('#dnd-creator-use-worldinfo').on('change', async function() {
-            state.useWorldInfo = $(this).is(':checked');
-            // 如果开启，且之前没有获取过 worldInfo，尝试获取
-            if (state.useWorldInfo && !state.worldInfo) {
-                const info = await TavernAPI.getEnabledWorldInfo();
-                state.worldInfo = info;
-            }
-            if (typeof window.DND_Dashboard_UI.saveCreatorState === 'function') {
-                window.DND_Dashboard_UI.saveCreatorState();
+        // 世界书选择切换
+        $container.find('#dnd-creator-worldinfo-select').on('change', async function() {
+            const selected = $(this).val();
+            state.selectedWorldbook = selected; // [修复] 记住选择，供重渲染与持久化使用
+            state.useWorldInfo = !!selected;
+
+            // [修复] 统一通过辅助函数解析世界书内容（'__auto__'=当前启用的全部，具体名称=指定世界书，空=不使用）
+            state.worldInfo = await self.resolveCreatorWorldInfo(selected);
+
+            // 【修复】使用 self.saveCreatorState() 防止全局对象未挂载报错
+            if (typeof self.saveCreatorState === 'function') {
+                self.saveCreatorState();
             }
         });
 
@@ -36284,24 +36651,29 @@ const removeLocalAvatarKey = (key) => {
                 type: 'warning'
             });
             if (confirmed) {
-                // [新增] 获取世界书内容
-                const worldInfo = await TavernAPI.getEnabledWorldInfo();
+                const allWorldbooks = await TavernAPI.getAllWorldbookNames();
+                // [修复] 不再硬编码世界书名：保留当前选择，老会话无该字段时回退到默认
+                const selectedWorldbook = (state.selectedWorldbook !== undefined)
+                    ? state.selectedWorldbook
+                    : ((allWorldbooks && allWorldbooks.length > 0) ? '__auto__' : '');
+                const worldInfo = await self.resolveCreatorWorldInfo(selectedWorldbook);
 
-                // 重置为初始状态，但保留配置
                 this._charCreatorState = {
                     selectedPresetId: state.selectedPresetId,
                     apiConfig: state.apiConfig,
                     modelList: state.modelList,
                     characterType: state.characterType,
+                    selectedWorldbook: selectedWorldbook, // [新增] 保留参考世界书选择
+                    availableWorldbooks: allWorldbooks, // [新增] 可选世界书列表
                     conversationHistory: [],
                     characterData: {},
                     isGenerating: false,
                     currentStep: 'init',
                     worldInfo: worldInfo,
-                    useWorldInfo: true
+                    useWorldInfo: !!selectedWorldbook
                 };
-                this.saveCreatorState(); // 保存（覆盖）旧状态
-                this.renderCharacterCreationPanel($container);
+                self.saveCreatorState();
+                self.renderCharacterCreationPanel($container);
             }
         });
         
@@ -36345,7 +36717,7 @@ const removeLocalAvatarKey = (key) => {
 
     // [新增] 渲染聊天选项
     renderChatOptions(config) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const $chatHistory = $('#dnd-creator-chat-history');
         const { question, options, type } = config;
         const isMulti = type === 'multiple';
@@ -36402,7 +36774,7 @@ const removeLocalAvatarKey = (key) => {
 
     // 发送消息给 AI
     async sendCreatorMessage(userMessage, isInitial = false) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const state = this._charCreatorState;
         const $chatHistory = $('#dnd-creator-chat-history');
         const $input = $('#dnd-creator-user-input');
@@ -36467,7 +36839,7 @@ ${JSON.stringify(state.characterData, null, 2)}
 5. **熟练项加值**: 检查熟练加值是否因等级提升而增加（如 1-4级+2, 5-8级+3）。
 
 在对话中：
-- 每次专注于一个升级步骤。
+- 每次专注于一个升级步骤，不要问多个问题
 - 当有多个选择时（如选择新法术、专长），**必须**使用 \`CHARACTER_OPTIONS\` 块输出选项，格式如下：
 \`\`\`CHARACTER_OPTIONS
 {
@@ -36477,6 +36849,8 @@ ${JSON.stringify(state.characterData, null, 2)}
 }
 \`\`\`
 - 解释规则依据 (DND 5E 规则或世界书自定义规则)。如果使用了自定义规则，请明确指出这是根据世界书设定的。
+- 【绝对禁止修改固定设定】：角色的【name】、【race_gender_age】、【appearance】、【personality】、【backstory】为固有角色设定。在升级向导中**绝对禁止询问、修改、扩写或重写这些内容**！最后输出 JSON 时必须**原封不动照抄当前角色数据中的原有内容**！
+
 
 最后，当升级的所有选择都确定后，输出更新后的 \`CHARACTER_DATA\` 块。**必须包含角色的所有数据（旧数据+新变化），而不仅仅是变化部分。** 格式与创建角色时相同。
 
@@ -36501,11 +36875,11 @@ ${JSON.stringify(state.characterData, null, 2)}
 2. 根据用户的回答，建议合适的种族和职业组合 (优先参考世界书设定，其次参考 DND 规则)
 3. 帮助用户确定属性值分配（使用标准点数购买或让用户自选）
 4. 询问角色的背景、性格特点（理想、牵绊、缺陷）
-5. 询问角色的外貌特征（发色、眼睛、身高、特征）
+5. 询问角色的外貌特征（毛发、鳞片、眼睛、身高、特征等等）
 6. 帮助用户构思一个简短的背景故事（不超过300字）
 
 在对话过程中，请：
-- 每次只问1-2个问题，不要一次问太多
+- 每次只问1个问题，不要一次问多个问题
 - 提供具体的选项供用户选择（**必须**通过 CHARACTER_OPTIONS 输出）
 - 解释你的建议理由
 - 保持友好和鼓励的语气
@@ -36515,43 +36889,42 @@ ${JSON.stringify(state.characterData, null, 2)}
 {
 "question": "请选择你的种族...",
 "type": "single",
-"options": ["人类", "精灵", "矮人", "其他"]
+"options": ["黎博利", "龙", "阿戈尔", "其他"]
 }
 \`\`\`
 
 当收集到足够信息后，输出一个特殊格式的角色数据块（严格遵守此JSON格式）：
 \`\`\`CHARACTER_DATA
 {
-"name": "角色全名",
-"race_gender_age": "种族/性别/年龄（如：半精灵/男/32岁）",
-"class": "职业及子职（如：圣武士(复仇誓言) Lv1）",
-"level": 1,
-"appearance": "外貌描述（详细的外貌特征）",
-"personality": "性格特点（核心性格、理想、牵绊、缺陷）",
-"backstory": "背景故事（不超过300字）",
-"stats": {"STR": 10, "DEX": 10, "CON": 10, "INT": 10, "WIS": 10, "CHA": 10},
-"hp": "当前HP/最大HP（如：12/12）",
-"ac": 10,
-"initiative": 0,
-"speed": "30尺(6格)",
-"saving_throws": ["力量", "体质"],
-"skill_proficiencies": ["运动", "威吓"],
-"passive_perception": 10,
-"resources": {
-    "spell_slots": {"1级": "3/4"},
-    "class_resources": {"动作如潮": "1/1"},
-    "hit_dice": "3/3"
-},
-"features": [
-    {"name": "战斗风格(防御)", "type": "职业特性", "desc": "着装护甲时AC+1"},
-    {"name": "复苏之风", "type": "职业特性", "desc": "用附赠动作恢复1d10+等级点HP"}
-],
-"spells": [
-    {"name": "魔能爆", "level": 0, "school": "塑能", "time": "1动作", "range": "120尺", "comp": "V,S", "duration": "立即", "desc": "1d10力场伤害..."},
-    {"name": "护盾术", "level": 1, "school": "防护", "time": "1反应", "range": "自身", "comp": "V,S", "duration": "1轮", "desc": "AC+5直到回合结束..."}
-]${state.characterType === 'party' ? `,
-"member_type": "同伴",
-"control_method": "AI控制"` : ''}
+  "name": "角色全名",
+  "race_gender_age": "种族/性别/年龄(如: 菲林-猫裔/雌/22)",
+  "class": "职业名称(如: 游侠)",
+  "level": 1,
+  "appearance": "外貌体征与着装描写",
+  "personality": "性格特质、理想、牵绊与缺陷",
+  "backstory": "角色背景故事(≤300字)",
+  "stats": {"STR": 14, "DEX": 16, "CON": 14, "INT": 10, "WIS": 12, "CHA": 8},
+  "hp": "12/12",
+  "ac": 14,
+  "initiative": "+3",
+  "speed": "30尺(6格)",
+  "saving_throws": ["力量", "敏捷"],
+  "skill_proficiencies": ["运动", "隐匿", "求生"],
+  "passive_perception": 13,
+  "resources": {
+    "spell_slots": "无",
+    "class_resources": "无",
+    "special_abilities": "无",
+    "hit_dice": "1/1"
+  },
+  "features": [
+    {"name": "宿敌", "desc": "对特定类型生物追踪与知识检定具有优势", "stat_increase": "无"}
+  ],
+  "spells": [
+    {"name": "猎人印记", "level": "1环", "time": "1附赠", "range": "90尺", "cost": "1环法术位x1", "duration": "专注,1小时", "desc": "命中额外造成1d6武器伤害", "upcast": "提升持续时间"}
+  ]${state.characterType === 'party' ? `,
+  "member_type": "同伴",
+  "join_reason": "初次相遇并受雇加入队伍"` : ''}
 }
 \`\`\`
 
@@ -36587,7 +36960,17 @@ ${JSON.stringify(state.characterData, null, 2)}
                 requestOptions.customConfig = state.apiConfig;
             }
 
+
+
+            // [调试] 打印发往独立 API 的完整提示词消息
+            console.groupCollapsed('%c[DND Creator] 发送给独立 API 的完整提示词 (点击展开)', 'color: #3498db; font-weight: bold; font-size: 13px;');
+            console.log('【1. 原始 Messages 数组结构】:', messages);
+            console.log('【2. 完整合并文本内容】:\n\n' + messages.map(m => `--- [${m.role.toUpperCase()}] ---\n${m.content}`).join('\n\n'));
+            console.groupEnd();
+
             const response = await TavernAPI.generate(messages, requestOptions);
+
+            
             
             // 处理响应
             if (response) {
@@ -36661,11 +37044,11 @@ ${JSON.stringify(state.characterData, null, 2)}
     },
 
     // 完成角色创建，保存数据
+    // 完成角色创建/升级，保存数据（自愈与强容错强化版）
     async finalizeCharacterCreation(options = {}) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const state = this._charCreatorState;
         const data = state.characterData;
-
         const { _retrying = false } = options || {};
         
         if (!data || !data.name) {
@@ -36674,427 +37057,348 @@ ${JSON.stringify(state.characterData, null, 2)}
         }
         
         try {
-            // 获取原始数据
             const rawData = DataManager.getAllData();
-            if (!rawData) {
-                throw new Error('无法获取数据库');
-            }
+            if (!rawData) throw new Error('无法获取数据库对象');
             
-            // 确定是主角(PC) 还是 队友(Party)
             const isPC = state.characterType === 'pc';
-            
-            // [新增] 兼容升级模式下的 ID 获取
             const targetId = state.mode === 'levelup' ? state.targetCharId : null;
 
-            // 统一使用 CHARACTER_* 表
-            // 查找表对象 (增强查找逻辑，兼容不同前缀)
-            const findTable = (frag) => Object.values(rawData).find(s =>
-                s.uid === frag ||
-                s.uid === `sheet_${frag}` ||
-                s.uid === `sheet_CHARACTER_${frag}` ||
-                (s.name && s.name.includes(frag))
-            );
+            // 1. 高级多重模糊查找表对象 (UID / sheet_UID / 中文名 全覆盖)
+            const findTable = (keywords) => {
+                const kwList = Array.isArray(keywords) ? keywords : [keywords];
+                return Object.values(rawData).find(s => {
+                    if (!s || typeof s !== 'object') return false;
+                    const uid = String(s.uid || '').toLowerCase();
+                    const name = String(s.name || '').toLowerCase();
+                    return kwList.some(kw => {
+                        const k = String(kw).toLowerCase();
+                        return uid === k || uid === `sheet_${k}` || uid.includes(k) || name.includes(k);
+                    });
+                });
+            };
             
-            const mainTable = findTable('CHARACTER_Registry') || findTable('Registry');
-            const attrTable = findTable('CHARACTER_Attributes') || findTable('Attributes');
-            const resTable = findTable('CHARACTER_Resources') || findTable('Resources');
-            const skillLibTable = findTable('SKILL_Library');
-            const skillLinkTable = findTable('CHARACTER_Skills');
-            const featLibTable = findTable('FEAT_Library');
-            const featLinkTable = findTable('CHARACTER_Feats');
+            const mainTable = findTable(['CHARACTER_Registry', '角色表', 'Registry']);
+            const attrTable = findTable(['CHARACTER_Attributes', '角色属性', 'Attributes']);
+            const resTable = findTable(['CHARACTER_Resources', '角色资源', 'Resources']);
+            const skillLibTable = findTable(['SKILL_Library', '技能/法术库', '技能库', '法术库']);
+            const skillLinkTable = findTable(['CHARACTER_Skills', '角色技能关联', '技能关联']);
+            const featLibTable = findTable(['FEAT_Library', '专长库', '特性库']);
+            const featLinkTable = findTable(['CHARACTER_Feats', '角色专长关联', '专长关联']);
 
-            const spells = data.spells || [];
-            const features = data.features || [];
+            // 2. 智能提取表头（优先从 content[0]、其次 columns、最后从 DDL 自动解析）
+            const getTableHeaders = (table) => {
+                if (!table) return [];
+                if (Array.isArray(table.content) && table.content.length > 0 && Array.isArray(table.content[0]) && table.content[0].length > 0) {
+                    return table.content[0];
+                }
+                if (Array.isArray(table.columns) && table.columns.length > 0) return table.columns;
+                if (Array.isArray(table.headers) && table.headers.length > 0) return table.headers;
+                
+                // 从 DDL 中动态提取物理列名
+                const ddl = table.sourceData?.ddl || table.sourceData?.note || '';
+                if (ddl) {
+                    const lines = ddl.split('\n');
+                    const cols = [];
+                    for (const line of lines) {
+                        const clean = line.trim().replace(/^CREATE\s+TABLE[^(]+\(/i, '').replace(/\);?$/, '');
+                        const match = clean.match(/^([a-zA-Z0-9_]+)\s+/);
+                        if (match && !['create', 'table', 'primary', 'foreign', 'check', 'unique', 'constraint'].includes(match[1].toLowerCase())) {
+                            cols.push(match[1]);
+                        }
+                    }
+                    if (cols.length > 0) return cols;
+                }
+                return [];
+            };
 
-            // 模板表格有效性检查（缺失/损坏时引导导入，并在成功后自动重试保存）
-            const isTableStructValid = (table, requiredHeaders = []) => {
-                if (!table) return false;
-                if (!Array.isArray(table.content) || table.content.length === 0) return false;
-                const headers = table.content[0];
-                if (!Array.isArray(headers) || headers.length === 0) return false;
-                return requiredHeaders.every(h => headers.includes(h));
+            // 3. 辅助：不区分大小写与支持多别名查找列索引
+            const getColIdx = (headers, aliases) => {
+                if (!Array.isArray(headers)) return -1;
+                const aliasList = Array.isArray(aliases) ? aliases : [aliases];
+                return headers.findIndex(h => {
+                    if (!h) return false;
+                    const cleanH = String(h).trim().toLowerCase();
+                    return aliasList.some(a => String(a).trim().toLowerCase() === cleanH);
+                });
+            };
+
+            // 4. 表格结构有效性校验与自动自愈初始化
+            const ensureTableValid = (table, requiredMap, tableNameLabel) => {
+                if (!table) return `未找到【${tableNameLabel}】表格`;
+                let headers = getTableHeaders(table);
+                if (!headers || headers.length === 0) return `【${tableNameLabel}】缺少表头结构与DDL定义`;
+                
+                // 自愈修复：如果 content 为空（0行表），自动将表头写入 content[0]
+                if (!Array.isArray(table.content) || table.content.length === 0) {
+                    table.content = [headers];
+                }
+
+                for (const [colKey, aliases] of Object.entries(requiredMap)) {
+                    if (getColIdx(headers, aliases) === -1) {
+                        return `【${tableNameLabel}】缺少字段 [${aliases.join(' / ')}]`;
+                    }
+                }
+                return null;
             };
 
             const templateIssues = [];
-            if (!isTableStructValid(mainTable, ['CHAR_ID'])) {
-                templateIssues.push('角色注册表 (CHARACTER_Registry) 缺失或结构异常（缺少表头或 CHAR_ID 列）');
-            }
+            const mainErr = ensureTableValid(mainTable, { id: ['char_id', 'CHAR_ID', '角色ID'] }, '角色表');
+            if (mainErr) templateIssues.push(mainErr);
 
+            const attrErr = ensureTableValid(attrTable, { id: ['char_id', 'CHAR_ID', '角色ID'] }, '角色属性表');
+            if (attrErr) templateIssues.push(attrErr);
+
+            const resErr = ensureTableValid(resTable, { id: ['char_id', 'CHAR_ID', '角色ID'] }, '角色资源表');
+            if (resErr) templateIssues.push(resErr);
+
+            const spells = data.spells || [];
             if (spells.length > 0) {
-                if (!isTableStructValid(skillLibTable, ['SKILL_ID', '技能名称'])) {
-                    templateIssues.push('法术/技能库 (SKILL_Library) 缺失或结构异常（缺少表头或 SKILL_ID/技能名称 列）');
-                }
-                if (!isTableStructValid(skillLinkTable, ['CHAR_ID', 'SKILL_ID'])) {
-                    templateIssues.push('角色-法术/技能关联表 (CHARACTER_Skills) 缺失或结构异常（缺少表头或 CHAR_ID/SKILL_ID 列）');
-                }
+                const skLibErr = ensureTableValid(skillLibTable, { id: ['skill_id', 'SKILL_ID'], name: ['技能名称', 'ji_neng_ming_cheng'] }, '技能库');
+                if (skLibErr) templateIssues.push(skLibErr);
+                const skLinkErr = ensureTableValid(skillLinkTable, { charId: ['char_id', 'CHAR_ID'], skillId: ['skill_id', 'SKILL_ID'] }, '角色技能关联表');
+                if (skLinkErr) templateIssues.push(skLinkErr);
             }
 
+            const features = data.features || [];
             if (features.length > 0) {
-                if (!isTableStructValid(featLibTable, ['FEAT_ID', '专长名称'])) {
-                    templateIssues.push('专长/特性库 (FEAT_Library) 缺失或结构异常（缺少表头或 FEAT_ID/专长名称 列）');
-                }
-                if (!isTableStructValid(featLinkTable, ['CHAR_ID', 'FEAT_ID'])) {
-                    templateIssues.push('角色-专长/特性关联表 (CHARACTER_Feats) 缺失或结构异常（缺少表头或 CHAR_ID/FEAT_ID 列）');
-                }
+                const ftLibErr = ensureTableValid(featLibTable, { id: ['feat_id', 'FEAT_ID'], name: ['专长名称', 'zhuan_chang_ming_cheng'] }, '专长库');
+                if (ftLibErr) templateIssues.push(ftLibErr);
+                const ftLinkErr = ensureTableValid(featLinkTable, { charId: ['char_id', 'CHAR_ID'], featId: ['feat_id', 'FEAT_ID'] }, '角色专长关联表');
+                if (ftLinkErr) templateIssues.push(ftLinkErr);
             }
 
             if (templateIssues.length > 0) {
-                // 已重试仍失败：避免无限循环
-                if (_retrying) {
-                    throw new Error(`模板表格仍缺失或结构异常，无法保存：\n- ${templateIssues.join('\n- ')}`);
-                }
-
-                const confirmed = await NotificationSystem.confirm(
-                    `检测到当前数据库缺少/损坏 DND 仪表盘配套模板，导致无法保存角色。\n\n问题：\n- ${templateIssues.join('\n- ')}\n\n是否立即导入配套模板，并在导入成功后自动重试本次保存？`,
-                    {
-                        title: '需要导入配套模板',
-                        confirmText: '导入并重试',
-                        cancelText: '取消保存',
-                        type: 'warning'
-                    }
-                );
-
-                if (!confirmed) {
-                    NotificationSystem.warning('已取消保存：缺少或损坏配套模板');
-                    return;
-                }
-
-                const imported = await TemplateSync.manualImport({
-                    skipConfirm: true,
-                    confirmTitle: '导入配套模板',
-                    confirmMessage: '角色保存需要更新配套模板结构，是否继续导入内置模板？'
-                });
-
-                if (!imported) {
-                    NotificationSystem.error('模板导入未完成，已取消本次保存。', '角色创建');
-                    return;
-                }
-
-                NotificationSystem.info('模板导入完成，正在重试保存...', '角色创建');
-                return await this.finalizeCharacterCreation({ _retrying: true });
+                throw new Error(`数据表结构校验未通过：\n${templateIssues.join('\n')}`);
             }
-            
-            if (!mainTable) throw new Error('找不到角色注册表 (CHARACTER_Registry)');
-            
+
+            // 5. 确定角色 ID
             let charId;
-            
             if (targetId) {
-                charId = targetId; // 升级模式使用现有ID
+                charId = targetId;
             } else if (isPC) {
                 charId = 'PC_MAIN';
             } else {
-                charId = 'ALLY_' + Date.now();
+                const mainHeaders = getTableHeaders(mainTable);
+                const charIdIdx = getColIdx(mainHeaders, ['char_id', 'CHAR_ID']);
+                const existingAllies = (mainTable.content || []).slice(1)
+                    .map(r => r[charIdIdx])
+                    .filter(id => id && String(id).startsWith('ALLY_'));
+                charId = `ALLY_${String(existingAllies.length + 1).padStart(2, '0')}`;
             }
-            
-            // 辅助函数：更新或插入行
+
+            // 6. 统一更新或插入行（全字段自适应映射）
             const updateOrInsert = (table, idVal) => {
-                if (!table.content) table.content = [];
-                if (table.content.length === 0) return; // 无表头，无法操作
+                const headers = getTableHeaders(table);
+                if (!headers || headers.length === 0) return;
                 
-                const headers = table.content[0];
-                const idIdx = headers.indexOf('CHAR_ID');
+                if (!Array.isArray(table.content) || table.content.length === 0) {
+                    table.content = [headers];
+                }
+
+                const idIdx = getColIdx(headers, ['char_id', 'CHAR_ID', '角色ID']);
                 if (idIdx === -1) return;
-                
-                // 查找现有行
+
                 let rowIndex = -1;
-                // 从索引1开始遍历
                 for (let i = 1; i < table.content.length; i++) {
                     if (table.content[i][idIdx] === idVal) {
                         rowIndex = i;
                         break;
                     }
                 }
-                
-                // 构建新数据行 (基于 headers)
-                const newRow = headers.map((h, i) => {
-                    if (h === 'CHAR_ID') return idVal;
-                    
-                    const oldVal = (rowIndex !== -1 && table.content[rowIndex] && table.content[rowIndex][i] !== undefined)
-                        ? table.content[rowIndex][i]
-                        : undefined;
 
-                    // 辅助函数：优先使用新数据，如果没有则使用旧数据
+                const newRow = headers.map((h, i) => {
+                    const colKey = String(h).trim().toLowerCase();
+                    const oldVal = (rowIndex !== -1 && table.content[rowIndex]) ? table.content[rowIndex][i] : undefined;
                     const val = (v) => (v !== undefined && v !== null && v !== '') ? v : oldVal;
 
-                    // Registry
-                    if (h === '成员类型') return isPC ? '主角' : (data.member_type || oldVal || '同伴');
-                    if (h === '姓名') return val(data.name);
-                    if (h === '种族/性别/年龄') return val(data.race_gender_age) || `${data.race}/-/1`;
-                    if (h === '职业') return val(data.class);
-                    if (h === '外貌描述') return val(data.appearance);
-                    if (h === '性格特点') return val(data.personality);
-                    if (h === '背景故事') return val(data.backstory);
-                    if (h === '加入时间') return !isPC ? '第1天' : (oldVal || null);
-                    
-                    // Attributes
-                    if (h === '等级') return val(data.level) || 1;
-                    if (h === 'HP') return val(data.hp) || '10/10';
-                    if (h === 'AC') return val(data.ac) || 10;
-                    if (h === '先攻加值') return (data.initiative !== undefined ? data.initiative : oldVal) || 0;
-                    if (h === '速度') return val(data.speed) || '30尺';
-                    if (h === '属性值') return data.stats ? JSON.stringify(data.stats) : (oldVal || '{}');
-                    if (h === '豁免熟练') return data.saving_throws ? JSON.stringify(data.saving_throws) : (oldVal || '[]');
-                    if (h === '技能熟练') return data.skill_proficiencies ? JSON.stringify(data.skill_proficiencies) : (oldVal || '[]');
-                    if (h === '被动感知') return (data.passive_perception !== undefined ? data.passive_perception : oldVal) || 10;
-                    if (h === '经验值' && isPC) {
-                        // 如果是升级模式，尝试保留当前经验值并更新上限
+                    // 主档案表 sheet_CHARACTER_Registry
+                    if (['char_id', 'charid', '角色id'].includes(colKey)) return idVal;
+                    if (['成员类型', 'cheng_yuan_lei_xing'].includes(colKey)) return isPC ? '主角' : (data.member_type || oldVal || '同伴');
+                    if (['姓名', 'xing_ming', 'name'].includes(colKey)) return state.mode === 'levelup' ? (oldVal || data.name) : val(data.name);
+                    if (['种族/性别/年龄', 'zhong_zu_xing_bie_nian_ling'].includes(colKey)) return state.mode === 'levelup' ? (oldVal || data.race_gender_age) : val(data.race_gender_age);
+                    if (['职业', 'zhi_ye', 'class'].includes(colKey)) return val(data.class);
+                    if (['外貌描述', 'wai_mao_miao_shu'].includes(colKey)) return state.mode === 'levelup' ? (oldVal || data.appearance) : val(data.appearance);
+                    if (['性格特点', 'xing_ge_te_dian'].includes(colKey)) return state.mode === 'levelup' ? (oldVal || data.personality) : val(data.personality);
+                    if (['背景故事', 'bei_jing_gu_shi'].includes(colKey)) return state.mode === 'levelup' ? (oldVal || data.backstory) : val(data.backstory);
+                    if (['加入节点', 'jia_ru_jie_dian', '加入时间'].includes(colKey)) return isPC ? '无' : (data.join_reason || oldVal || '剧情同行');
+
+                    // 属性表 sheet_CHARACTER_Attributes
+                    if (['等级', 'deng_ji', 'level'].includes(colKey)) return parseInt(val(data.level)) || 1;
+                    if (['hp', '生命值'].includes(colKey)) return val(data.hp) || '10/10';
+                    if (['ac', '护甲等级'].includes(colKey)) return parseInt(val(data.ac)) || 10;
+                    if (['先攻加值', 'xian_gong_jia_zhi'].includes(colKey)) return String(data.initiative !== undefined ? data.initiative : (oldVal || '+0'));
+                    if (['速度', 'su_du'].includes(colKey)) return val(data.speed) || '30尺(6格)';
+                    if (['属性值', 'shu_xing_zhi'].includes(colKey)) return data.stats ? (typeof data.stats === 'object' ? JSON.stringify(data.stats) : data.stats) : (oldVal || '{}');
+                    if (['豁免熟练', 'huo_mian_shu_lian'].includes(colKey)) return data.saving_throws ? (Array.isArray(data.saving_throws) ? JSON.stringify(data.saving_throws) : data.saving_throws) : (oldVal || '[]');
+                    if (['技能熟练', 'ji_neng_shu_lian'].includes(colKey)) return data.skill_proficiencies ? (Array.isArray(data.skill_proficiencies) ? JSON.stringify(data.skill_proficiencies) : data.skill_proficiencies) : (oldVal || '[]');
+                    if (['被动感知', 'bei_dong_gan_zhi'].includes(colKey)) return parseInt(data.passive_perception) || (parseInt(oldVal) || 10);
+                    if (['经验值', 'jing_yan_zhi'].includes(colKey)) {
                         if (state.mode === 'levelup' && rowIndex !== -1) {
-                            const oldVal = table.content[rowIndex][i] || '0/300';
-                            const currExp = parseInt(oldVal.split('/')[0]) || 0;
-                            
-                            // DND 5E 经验值表 (下标对应等级，值为下一级所需经验)
-                            // Lv1->Lv2: 300, Lv2->Lv3: 900 ...
-                            const xpTable = [
-                                0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000,
-                                85000, 100000, 120000, 140000, 165000, 195000, 225000, 265000, 305000, 355000
-                            ];
-                            
-                            const nextLevel = parseInt(data.level) || 1;
-                            // 获取下一级所需经验值 (作为分母)
-                            // 如果当前是Lv1(nextLevel=1), 目标是300 (xpTable[1])
-                            // 如果当前是Lv2(nextLevel=2), 目标是900 (xpTable[2])
-                            const nextExp = xpTable[nextLevel] || 355000;
-                            
-                            return `${currExp}/${nextExp}`;
+                            const currExp = parseInt(String(oldVal || '0/300').split('/')[0]) || 0;
+                            const xpTable = [0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000, 85000, 100000, 120000, 140000, 165000, 195000, 225000, 265000, 305000, 355000];
+                            const nextLvl = parseInt(data.level) || 1;
+                            return `${currExp}/${xpTable[nextLvl] || 355000}`;
                         }
                         return '0/300';
                     }
-                    
-                    // Resources
-                    if (h === '法术位') return data.resources?.spell_slots ? JSON.stringify(data.resources.spell_slots) : null;
-                    if (h === '职业资源') return data.resources?.class_resources ? JSON.stringify(data.resources.class_resources) : null;
-                    if (h === '生命骰') return data.resources?.hit_dice || null;
-                    if (h === '金币' && isPC) return 0;
-                    
-                    // 如果是更新，且没有提供新值，保留旧值
-                    if (rowIndex !== -1 && table.content[rowIndex][i] !== undefined) {
-                        return table.content[rowIndex][i];
+
+                    // 资源表 sheet_CHARACTER_Resources
+                    if (['法术位', 'fa_shu_wei'].includes(colKey)) {
+                        if (data.resources?.spell_slots && data.resources.spell_slots !== '无') {
+                            return typeof data.resources.spell_slots === 'object' ? JSON.stringify(data.resources.spell_slots) : data.resources.spell_slots;
+                        }
+                        return oldVal || '无';
                     }
-                    return null;
+                    if (['职业资源', 'zhi_ye_zi_yuan'].includes(colKey)) {
+                        if (data.resources?.class_resources && data.resources.class_resources !== '无') {
+                            return typeof data.resources.class_resources === 'object' ? JSON.stringify(data.resources.class_resources) : data.resources.class_resources;
+                        }
+                        return oldVal || '无';
+                    }
+                    if (['生命骰', 'sheng_ming_tou'].includes(colKey)) return val(data.resources?.hit_dice) || oldVal || '1/1';
+                    if (['特殊能力', 'te_shu_neng_li'].includes(colKey)) {
+                        if (data.resources?.special_abilities && data.resources.special_abilities !== '无') {
+                            return typeof data.resources.special_abilities === 'object' ? JSON.stringify(data.resources.special_abilities) : data.resources.special_abilities;
+                        }
+                        return oldVal || '无';
+                    }
+                    if (['金币', 'jin_bi'].includes(colKey)) return (oldVal !== undefined && oldVal !== null && oldVal !== '') ? parseInt(oldVal) : (isPC ? 15 : 5);
+
+                    return oldVal !== undefined ? oldVal : null;
                 });
-                
+
                 if (rowIndex !== -1) {
                     table.content[rowIndex] = newRow;
                 } else {
                     table.content.push(newRow);
                 }
             };
-            
+
             updateOrInsert(mainTable, charId);
             if (attrTable) updateOrInsert(attrTable, charId);
             if (resTable) updateOrInsert(resTable, charId);
 
-            // 处理技能和法术
+            // 7. 处理技能与法术库绑定
             if (spells.length > 0 && skillLibTable && skillLinkTable) {
-                const linkHeaders = skillLinkTable.content[0];
-                const charIdIdx = linkHeaders.indexOf('CHAR_ID');
-                const skillIdIdx = linkHeaders.indexOf('SKILL_ID');
+                const libHeaders = getTableHeaders(skillLibTable);
+                const linkHeaders = getTableHeaders(skillLinkTable);
 
-                // [Fix] 清理现有的重复技能 (保留一个，删除多余的)
-                if (charIdIdx !== -1 && skillIdIdx !== -1) {
-                    const charLinks = skillLinkTable.content.filter(row => row[charIdIdx] === charId);
-                    const nameMap = new Map(); // name -> [linkRow...]
-                    const rowsToDelete = new Set();
+                if (!Array.isArray(skillLibTable.content) || skillLibTable.content.length === 0) skillLibTable.content = [libHeaders];
+                if (!Array.isArray(skillLinkTable.content) || skillLinkTable.content.length === 0) skillLinkTable.content = [linkHeaders];
 
-                    charLinks.forEach(linkRow => {
-                        const skillId = linkRow[skillIdIdx];
-                        const libRow = skillLibTable.content.find(r => r[0] === skillId);
-                        if (libRow) {
-                            const name = (libRow[1] || '').trim();
-                            if (name) {
-                                if (!nameMap.has(name)) nameMap.set(name, []);
-                                nameMap.get(name).push(linkRow);
-                            }
-                        }
-                    });
-
-                    nameMap.forEach((rows, name) => {
-                        if (rows.length > 1) {
-                            console.log(`[CharCreator] 清理重复技能: ${name} (删除 ${rows.length - 1} 个)`);
-                            // 保留第一个，标记其余为删除
-                            for (let i = 1; i < rows.length; i++) {
-                                rowsToDelete.add(rows[i]);
-                            }
-                        }
-                    });
-
-                    if (rowsToDelete.size > 0) {
-                        skillLinkTable.content = skillLinkTable.content.filter(row => !rowsToDelete.has(row));
-                    }
-                }
+                const libIdIdx = getColIdx(libHeaders, ['skill_id', 'SKILL_ID']);
+                const libNameIdx = getColIdx(libHeaders, ['技能名称', 'ji_neng_ming_cheng']);
+                const linkCharIdx = getColIdx(linkHeaders, ['char_id', 'CHAR_ID']);
+                const linkSkillIdx = getColIdx(linkHeaders, ['skill_id', 'SKILL_ID']);
 
                 spells.forEach(spell => {
                     const spellName = (spell.name || '').trim();
                     if (!spellName) return;
 
-                    // [Fix] 预先检查是否已存在同名技能的关联 (防止重复)
-                    const matchingSkillIds = skillLibTable.content
-                        .filter(row => (row[1] || '').trim() === spellName)
-                        .map(row => row[0]);
+                    const existingLibRow = skillLibTable.content.find((r, i) => i > 0 && String(r[libNameIdx] || '').trim() === spellName);
+                    let skillId = existingLibRow ? existingLibRow[libIdIdx] : null;
 
-                    if (charIdIdx !== -1 && skillIdIdx !== -1 && matchingSkillIds.length > 0) {
-                        const isAlreadyLinked = skillLinkTable.content.some(row =>
-                            row[charIdIdx] === charId && matchingSkillIds.includes(row[skillIdIdx])
-                        );
-                        if (isAlreadyLinked) return;
-                    }
-
-                    // 1. 添加到技能库 (SKILL_Library)
-                    let skillId = 'SKILL_' + Math.random().toString(36).substr(2, 8);
-                    // 检查是否存在
-                    const existingSkill = skillLibTable.content.find(row => (row[1] || '').trim() === spellName);
-                    
-                    if (existingSkill) {
-                        skillId = existingSkill[0]; // 假设第一列是ID
-                        // [Fix] 更新描述 (如果 AI 提供了新描述)
-                        if (spell.desc) {
-                            const descIdx = skillLibTable.content[0].indexOf('效果描述');
-                            if (descIdx !== -1) existingSkill[descIdx] = spell.desc;
-                        }
+                    if (existingLibRow) {
+                        const descIdx = getColIdx(libHeaders, ['效果描述', 'xiao_guo_miao_shu']);
+                        if (descIdx !== -1 && spell.desc) existingLibRow[descIdx] = spell.desc;
                     } else {
-                        const libHeaders = skillLibTable.content[0];
+                        const count = skillLibTable.content.length;
+                        skillId = `SKILL_${String(count).padStart(2, '0')}`;
                         const newLibRow = libHeaders.map(h => {
-                            if (h === 'SKILL_ID') return skillId;
-                            if (h === '技能名称') return spellName;
-                            if (h === '技能类型') return '法术';
-                            if (h === '环阶') return spell.level !== undefined ? spell.level : '0';
-                            if (h === '学派') return spell.school || '-';
-                            if (h === '施法时间') return spell.time || '-';
-                            if (h === '射程') return spell.range || '-';
-                            if (h === '成分') return spell.comp || '-';
-                            if (h === '持续时间') return spell.duration || '-';
-                            if (h === '效果描述') return spell.desc;
+                            const k = String(h).trim().toLowerCase();
+                            if (['skill_id', 'skillid'].includes(k)) return skillId;
+                            if (['技能名称', 'ji_neng_ming_cheng'].includes(k)) return spellName;
+                            if (['技能类型', 'ji_neng_lei_xing'].includes(k)) return spell.type || '法术';
+                            if (['环阶', 'huan_jie'].includes(k)) return spell.level !== undefined ? (String(spell.level).includes('环') ? String(spell.level) : `${spell.level}环`) : '-';
+                            if (['施法时间', 'shi_fa_shi_jian'].includes(k)) return spell.time || '1动作';
+                            if (['射程', 'she_cheng'].includes(k)) return spell.range || '自身';
+                            if (['消耗资源', 'xiao_hao_zi_yuan'].includes(k)) return spell.cost || (spell.level ? `${spell.level}环法术位x1` : '无');
+                            if (['持续时间', 'chi_xu_shi_jian'].includes(k)) return spell.duration || '立即';
+                            if (['效果描述', 'xiao_guo_miao_shu'].includes(k)) return spell.desc || '';
+                            if (['升阶效果', 'sheng_jie_xiao_guo'].includes(k)) return spell.upcast || '-';
                             return null;
                         });
                         skillLibTable.content.push(newLibRow);
                     }
 
-                    // 2. 添加到关联表 (CHARACTER_Skills) - 避免重复
-                    if (charIdIdx !== -1 && skillIdIdx !== -1) {
-                        const linkExists = skillLinkTable.content.some(row =>
-                            row[charIdIdx] === charId && row[skillIdIdx] === skillId
-                        );
-                        if (linkExists) return;
+                    const isAlreadyLinked = skillLinkTable.content.some((r, i) => i > 0 && r[linkCharIdx] === charId && r[linkSkillIdx] === skillId);
+                    if (!isAlreadyLinked && skillId) {
+                        const linkCount = skillLinkTable.content.length;
+                        const newLinkRow = linkHeaders.map(h => {
+                            const k = String(h).trim().toLowerCase();
+                            if (['skill_link_id', 'link_id', 'linkid'].includes(k)) return `SLINK_${String(linkCount).padStart(2, '0')}`;
+                            if (['char_id', 'charid'].includes(k)) return charId;
+                            if (['skill_id', 'skillid'].includes(k)) return skillId;
+                            if (['已准备', 'yi_zhun_bei'].includes(k)) return '是';
+                            if (['备注', 'bei_zhu'].includes(k)) return spell.source || '创建/升级掌握';
+                            return null;
+                        });
+                        skillLinkTable.content.push(newLinkRow);
                     }
-
-                    const newLinkRow = linkHeaders.map(h => {
-                        if (h === 'LINK_ID') return 'LNK_' + Math.random().toString(36).substr(2, 8);
-                        if (h === 'CHAR_ID') return charId;
-                        if (h === 'SKILL_ID') return skillId;
-                        if (h === '已准备') return '是';
-                        return null;
-                    });
-                    skillLinkTable.content.push(newLinkRow);
                 });
             }
 
-            // 处理专长和特性
+            // 8. 处理专长与特性库绑定
             if (features.length > 0 && featLibTable && featLinkTable) {
-                const linkHeaders = featLinkTable.content[0];
-                const charIdIdx = linkHeaders.indexOf('CHAR_ID');
-                const featIdIdx = linkHeaders.indexOf('FEAT_ID');
+                const libHeaders = getTableHeaders(featLibTable);
+                const linkHeaders = getTableHeaders(featLinkTable);
 
-                // [Fix] 清理现有的重复专长/特性
-                if (charIdIdx !== -1 && featIdIdx !== -1) {
-                    const charLinks = featLinkTable.content.filter(row => row[charIdIdx] === charId);
-                    const nameMap = new Map(); // name -> [linkRow...]
-                    const rowsToDelete = new Set();
+                if (!Array.isArray(featLibTable.content) || featLibTable.content.length === 0) featLibTable.content = [libHeaders];
+                if (!Array.isArray(featLinkTable.content) || featLinkTable.content.length === 0) featLinkTable.content = [linkHeaders];
 
-                    charLinks.forEach(linkRow => {
-                        const featId = linkRow[featIdIdx];
-                        const libRow = featLibTable.content.find(r => r[0] === featId);
-                        if (libRow) {
-                            const name = (libRow[1] || '').trim();
-                            if (name) {
-                                if (!nameMap.has(name)) nameMap.set(name, []);
-                                nameMap.get(name).push(linkRow);
-                            }
-                        }
-                    });
-
-                    nameMap.forEach((rows, name) => {
-                        if (rows.length > 1) {
-                            console.log(`[CharCreator] 清理重复特性: ${name} (删除 ${rows.length - 1} 个)`);
-                            for (let i = 1; i < rows.length; i++) {
-                                rowsToDelete.add(rows[i]);
-                            }
-                        }
-                    });
-
-                    if (rowsToDelete.size > 0) {
-                        featLinkTable.content = featLinkTable.content.filter(row => !rowsToDelete.has(row));
-                    }
-                }
+                const libIdIdx = getColIdx(libHeaders, ['feat_id', 'FEAT_ID']);
+                const libNameIdx = getColIdx(libHeaders, ['专长名称', 'zhuan_chang_ming_cheng']);
+                const linkCharIdx = getColIdx(linkHeaders, ['char_id', 'CHAR_ID']);
+                const linkFeatIdx = getColIdx(linkHeaders, ['feat_id', 'FEAT_ID']);
 
                 features.forEach(feat => {
                     const featName = (feat.name || '').trim();
                     if (!featName) return;
 
-                    // 1. 查找所有名称匹配的 featId (包括可能重复的库条目)
-                    const matchingFeatIds = featLibTable.content
-                        .filter(row => (row[1] || '').trim() === featName)
-                        .map(row => row[0]);
+                    const existingLibRow = featLibTable.content.find((r, i) => i > 0 && String(r[libNameIdx] || '').trim() === featName);
+                    let featId = existingLibRow ? existingLibRow[libIdIdx] : null;
 
-                    // 2. 检查该角色是否已经链接了其中任何一个 featId
-                    if (charIdIdx !== -1 && featIdIdx !== -1 && matchingFeatIds.length > 0) {
-                        const isAlreadyLinked = featLinkTable.content.some(row =>
-                            row[charIdIdx] === charId && matchingFeatIds.includes(row[featIdIdx])
-                        );
-                        if (isAlreadyLinked) {
-                            console.log(`[CharCreator] 跳过重复专长/特性: ${featName}`);
-                            return;
-                        }
-                    }
-
-                    let featId = 'FEAT_' + Math.random().toString(36).substr(2, 8);
-                    const existingFeat = featLibTable.content.find(row => (row[1] || '').trim() === featName);
-                    
-                    if (existingFeat) {
-                        featId = existingFeat[0];
-                        // [Fix] 更新描述 (如果 AI 提供了新描述)
-                        if (feat.desc) {
-                            const descIdx = featLibTable.content[0].indexOf('效果描述');
-                            if (descIdx !== -1) existingFeat[descIdx] = feat.desc;
-                        }
+                    if (existingLibRow) {
+                        const descIdx = getColIdx(libHeaders, ['效果描述', 'xiao_guo_miao_shu']);
+                        if (descIdx !== -1 && feat.desc) existingLibRow[descIdx] = feat.desc;
                     } else {
-                        const libHeaders = featLibTable.content[0];
+                        const count = featLibTable.content.length;
+                        featId = `FEAT_${String(count).padStart(2, '0')}`;
                         const newLibRow = libHeaders.map(h => {
-                            if (h === 'FEAT_ID') return featId;
-                            if (h === '专长名称') return featName;
-                            if (h === '类别') return feat.type || '职业特性';
-                            if (h === '效果描述') return feat.desc;
+                            const k = String(h).trim().toLowerCase();
+                            if (['feat_id', 'featid'].includes(k)) return featId;
+                            if (['专长名称', 'zhuan_chang_ming_cheng'].includes(k)) return featName;
+                            if (['效果描述', 'xiao_guo_miao_shu'].includes(k)) return feat.desc || '';
+                            if (['属性提升', 'shu_xing_ti_sheng'].includes(k)) return feat.stat_increase || '无';
                             return null;
                         });
                         featLibTable.content.push(newLibRow);
                     }
 
-                    // 检查重复
-                    if (charIdIdx !== -1 && featIdIdx !== -1) {
-                        const linkExists = featLinkTable.content.some(row =>
-                            row[charIdIdx] === charId && row[featIdIdx] === featId
-                        );
-                        if (linkExists) return;
+                    const isAlreadyLinked = featLinkTable.content.some((r, i) => i > 0 && r[linkCharIdx] === charId && r[linkFeatIdx] === featId);
+                    if (!isAlreadyLinked && featId) {
+                        const linkCount = featLinkTable.content.length;
+                        const newLinkRow = linkHeaders.map(h => {
+                            const k = String(h).trim().toLowerCase();
+                            if (['feat_link_id', 'link_id', 'linkid'].includes(k)) return `FLINK_${String(linkCount).padStart(2, '0')}`;
+                            if (['char_id', 'charid'].includes(k)) return charId;
+                            if (['feat_id', 'featid'].includes(k)) return featId;
+                            if (['获取等级', 'huo_qu_deng_ji'].includes(k)) return `${data.level || 1}级`;
+                            if (['已选择项', 'yi_xuan_ze_xiang'].includes(k)) return feat.choice || '无';
+                            if (['备注', 'bei_zhu'].includes(k)) return feat.note || '创建/升级获得';
+                            return null;
+                        });
+                        featLinkTable.content.push(newLinkRow);
                     }
-
-                    const newLinkRow = linkHeaders.map(h => {
-                        if (h === 'LINK_ID') return 'LNK_' + Math.random().toString(36).substr(2, 8);
-                        if (h === 'CHAR_ID') return charId;
-                        if (h === 'FEAT_ID') return featId;
-                        return null;
-                    });
-                    featLinkTable.content.push(newLinkRow);
                 });
             }
             
-            // 保存
+            // 9. 持久化保存并刷新视图
             await DiceManager.saveData(rawData);
-            
-            // 更新状态
             state.currentStep = 'complete';
-            this.saveCreatorState(); // 保存状态
+            this.saveCreatorState();
             this.renderCharacterCreationPanel($('#dnd-creator-chat-history').closest('#dnd-content'));
             
-            // 显示成功通知
             const successMsg = state.mode === 'levelup'
                 ? `🎉 角色 "${data.name}" 升级成功 (Lv.${data.level})！`
                 : `🎉 ${isPC ? '主角' : '队友'} "${data.name}" 创建成功！`;
@@ -37120,7 +37424,7 @@ ${JSON.stringify(state.characterData, null, 2)}
 
 /* harmony default export */ const UIPanels = ({
     renderPanel(panelName) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const $content = $('#dnd-content');
         if (!$content.length) return;
         
@@ -37170,7 +37474,7 @@ ${JSON.stringify(state.characterData, null, 2)}
     },
 
     renderPartyPanel($container) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const party = DataManager.getPartyData() || [];
         
         // [新增] 队伍工具栏 - 导入/导出按钮
@@ -37227,6 +37531,18 @@ ${JSON.stringify(state.characterData, null, 2)}
                     hpCurrent = parseInt(parts[0]) || 0;
                     hpMax = parseInt(parts[1]) || 1;
                     hpPercent = Math.min(100, Math.max(0, (hpCurrent / hpMax) * 100));
+                }
+            }
+
+            //解析 经验值
+
+            let expCurrent = 0, expMax = 0, expPercent = 0;
+            if (char['经验值']) {
+                const expParts = char['经验值'].toString().split('/');
+                if (expParts.length === 2) {
+                    expCurrent = parseInt(expParts[0]) || 0;
+                    expMax = parseInt(expParts[1]) || 1;
+                    expPercent = Math.min(100, Math.max(0, (expCurrent / expMax) * 100));
                 }
             }
 
@@ -37308,7 +37624,7 @@ ${JSON.stringify(state.characterData, null, 2)}
                                 <span>${char['经验值']}</span>
                             </div>
                             <div class="dnd-bar-container dnd-bar-exp">
-                                <div class="dnd-bar-fill" style="width: 50%"></div>
+                                <div class="dnd-bar-fill" style="width: ${expPercent}%"></div>
                             </div>
                         </div>` : ''}
                         
@@ -37333,7 +37649,7 @@ ${JSON.stringify(state.characterData, null, 2)}
     },
 
     renderQuestsPanel($container) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const quests = DataManager.getTable('QUEST_Active');
         if (!quests) {
             $container.html('暂无任务数据。');
@@ -37363,7 +37679,7 @@ ${JSON.stringify(state.characterData, null, 2)}
     },
 
     renderCombatPanel($container) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const encounters = DataManager.getTable('COMBAT_Encounter');
         const mapData = DataManager.getTable('COMBAT_BattleMap');
 
@@ -37449,7 +37765,7 @@ ${JSON.stringify(state.characterData, null, 2)}
 
         const sortedCats = [...allCats].sort();
 
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const $container = $('<div style="display:flex;flex-direction:column;gap:20px;"></div>');
 
         // 获取所有持有者 (Owner)
@@ -37548,7 +37864,7 @@ ${JSON.stringify(state.characterData, null, 2)}
 
     // [新增] 主面板物品过滤逻辑
     filterPanelInventory() {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const searchText = $('#dnd-panel-inv-search').val().toLowerCase();
         const filterCat = $('#dnd-panel-inv-filter').val();
         const filterOwner = $('#dnd-panel-inv-owner').val();
@@ -37637,7 +37953,7 @@ ${JSON.stringify(state.characterData, null, 2)}
     },
 
     renderNPCPanel($c) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const npcs = DataManager.getTable('NPC_Registry');
         if (!npcs) { $c.html('无 NPC 数据'); return; }
         
@@ -37746,7 +38062,7 @@ ${JSON.stringify(state.characterData, null, 2)}
 
     // 显示模态框（用于全屏面板的NPC详情等）
     showModal(title, content) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const $overlay = $('#dnd-modal-overlay');
         const $modal = $('#dnd-modal-content');
         
@@ -37771,7 +38087,7 @@ ${JSON.stringify(state.characterData, null, 2)}
     },
 
     renderArchivesPanel($c) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const data = DataManager.getAllData();
         if (!data) { $c.html('无数据'); return; }
         
@@ -37811,7 +38127,7 @@ ${JSON.stringify(state.characterData, null, 2)}
 
     // [新增] 导出队伍数据到文件 (支持角色选择)
     exportPartyToFile() {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const party = DataManager.getPartyData() || [];
         
         if (party.length === 0) {
@@ -37902,19 +38218,10 @@ ${JSON.stringify(state.characterData, null, 2)}
                     return;
                 }
 
-                // 使用浏览器 API 下载
-                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `DND_Party_${new Date().toISOString().slice(0, 10)}.json`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                
                 $overlay.removeClass('active');
-                NotificationSystem.success(`已导出 ${selectedIds.length} 个角色`);
+                // [修复] 不再直接触发浏览器下载（部分环境会被沙箱拦截导致"点了没反应"），
+                // 改为弹出结果窗口：提供"复制到剪贴板"与"下载文件"两种保存方式
+                self.showExportResultDialog(data, selectedIds.length);
             } catch (e) {
                 Logger.error('Export failed:', e);
                 NotificationSystem.error('导出失败: ' + e.message);
@@ -37922,43 +38229,178 @@ ${JSON.stringify(state.characterData, null, 2)}
         });
     },
 
-    // [新增] 从文件导入队伍数据 (支持角色选择和导入模式)
+    // [修复] 打开导入窗口：支持"粘贴 JSON"与"从文件选择"两种方式（提高在沙箱/移动端环境下的可用性）
     importPartyFromFile() {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.json';
-        
-        input.onchange = (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
+        this.showImportDialog();
+    },
 
-            const reader = new FileReader();
-            reader.onload = async (event) => {
-                try {
-                    const json = JSON.parse(event.target.result);
-                    
-                    // 验证数据格式
-                    if (!json || !json.party || !Array.isArray(json.party) || json.party.length === 0) {
-                        NotificationSystem.error('无效的数据格式或无角色数据');
-                        return;
-                    }
-                    
-                    // 显示导入选项对话框
-                    this.showImportOptionsDialog(json);
-                } catch (err) {
-                    Logger.error('Import parse error:', err);
-                    NotificationSystem.error('文件解析失败');
+    // [新增] 显示导出结果窗口（复制到剪贴板 / 下载文件）
+    showExportResultDialog(data, count) {
+        const { $ } = Utils_getCore();
+        const jsonStr = JSON.stringify(data, null, 2);
+        const fileName = `DND_Party_${new Date().toISOString().slice(0, 10)}.json`;
+        const safeJsonHtml = jsonStr.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+
+        const modalContent = `
+            <div style="margin-bottom:12px;">
+                <p style="color:var(--dnd-text-dim);margin-bottom:8px;">已生成 ${count} 个角色的导出数据（约 ${(jsonStr.length / 1024).toFixed(1)} KB）。</p>
+                <p style="color:var(--dnd-text-highlight);font-size:12px;margin-bottom:10px;">💡 若"下载文件"在当前环境无效，请改用"复制到剪贴板"，把内容粘贴保存为 <b>${fileName}</b> 即可完成备份。</p>
+                <textarea id="dnd-export-result-textarea" readonly style="width:100%;height:180px;background:var(--dnd-bg-secondary);border:1px solid var(--dnd-border-inner);border-radius:4px;color:var(--dnd-text-main);font-size:11px;font-family:monospace;padding:8px;resize:vertical;box-sizing:border-box;">${safeJsonHtml}</textarea>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;">
+                <button class="dnd-btn dnd-export-copy-btn" style="background:var(--dnd-bg-tertiary);border:1px solid var(--dnd-border-subtle);color:var(--dnd-text-main);padding:8px 16px;border-radius:4px;cursor:pointer;">📋 复制到剪贴板</button>
+                <button class="dnd-btn dnd-export-download-btn" style="background:var(--dnd-bg-tertiary);border:1px solid var(--dnd-border-gold);color:var(--dnd-text-main);padding:8px 16px;border-radius:4px;cursor:pointer;">💾 下载文件</button>
+                <button class="dnd-btn dnd-export-result-close-btn" style="background:var(--dnd-border-gold);border:none;color:var(--dnd-text-header);padding:8px 16px;border-radius:4px;cursor:pointer;font-weight:bold;">关闭</button>
+            </div>
+        `;
+
+        this.showModal('📤 导出结果', modalContent);
+
+        const $overlay = $('#dnd-modal-overlay');
+        const $ta = $overlay.find('#dnd-export-result-textarea');
+
+        // 点击文本框时自动全选，便于手动复制
+        $ta.on('click', function() { this.select(); });
+
+        // 复制到剪贴板
+        $overlay.find('.dnd-export-copy-btn').on('click', async function() {
+            const text = $ta.val();
+            let copied = false;
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(text);
+                    copied = true;
                 }
+            } catch (e) { copied = false; }
+
+            if (!copied) {
+                // 回退方案：选中文本 + execCommand
+                try {
+                    $ta[0].focus();
+                    $ta[0].select();
+                    copied = document.execCommand('copy');
+                } catch (e) { copied = false; }
+            }
+
+            if (copied) {
+                NotificationSystem.success('已复制到剪贴板');
+            } else {
+                NotificationSystem.warning('复制失败：请手动长按/全选文本框内容进行复制');
+            }
+        });
+
+        // 下载文件（部分环境不可用时给出提示）
+        $overlay.find('.dnd-export-download-btn').on('click', function() {
+            try {
+                const blob = new Blob([jsonStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                NotificationSystem.success('已触发下载：' + fileName);
+            } catch (e) {
+                Logger.error('Download failed:', e);
+                NotificationSystem.error('下载失败（当前环境可能禁止下载），请使用"复制到剪贴板"方式保存');
+            }
+        });
+
+        // 关闭
+        $overlay.find('.dnd-export-result-close-btn').on('click', () => {
+            $overlay.removeClass('active');
+        });
+    },
+
+    // [新增] 导入窗口（粘贴 / 文件两种方式入口）
+    showImportDialog() {
+        const { $ } = Utils_getCore();
+
+        const modalContent = `
+            <div style="margin-bottom:12px;">
+                <p style="color:var(--dnd-text-dim);margin-bottom:8px;">选择一种方式提供队伍数据：</p>
+                <textarea id="dnd-import-paste-textarea" placeholder="【方式一】在此粘贴队伍 JSON 内容（从'导出结果'中复制的文本）..." style="width:100%;height:150px;background:var(--dnd-bg-secondary);border:1px solid var(--dnd-border-inner);border-radius:4px;color:var(--dnd-text-main);font-size:11px;font-family:monospace;padding:8px;resize:vertical;box-sizing:border-box;"></textarea>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;">
+                <button class="dnd-btn dnd-import-from-file-btn" style="background:var(--dnd-bg-tertiary);border:1px solid var(--dnd-border-subtle);color:var(--dnd-text-main);padding:8px 16px;border-radius:4px;cursor:pointer;">📂 从文件选择</button>
+                <button class="dnd-btn dnd-import-next-btn" style="background:var(--dnd-border-gold);border:none;color:var(--dnd-text-header);padding:8px 16px;border-radius:4px;cursor:pointer;font-weight:bold;">📥 下一步</button>
+                <button class="dnd-btn dnd-import-dialog-cancel-btn" style="background:var(--dnd-bg-tertiary);border:1px solid var(--dnd-border-subtle);color:var(--dnd-text-main);padding:8px 16px;border-radius:4px;cursor:pointer;">取消</button>
+            </div>
+        `;
+
+        this.showModal('📥 导入队伍', modalContent);
+
+        const $overlay = $('#dnd-modal-overlay');
+        const self = this;
+
+        // 从文件选择（读取后进入导入选项）
+        $overlay.find('.dnd-import-from-file-btn').on('click', function() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+
+            input.onchange = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const json = self._parsePartyImportJson(event.target.result);
+                    if (json) {
+                        $overlay.removeClass('active');
+                        self.showImportOptionsDialog(json);
+                    }
+                };
+                reader.onerror = () => {
+                    NotificationSystem.error('文件读取失败');
+                };
+                reader.readAsText(file);
             };
-            reader.readAsText(file);
-        };
-        
-        input.click();
+
+            input.click();
+        });
+
+        // 下一步：解析粘贴内容
+        $overlay.find('.dnd-import-next-btn').on('click', function() {
+            const text = $overlay.find('#dnd-import-paste-textarea').val();
+            if (!text || !text.trim()) {
+                NotificationSystem.error('请先粘贴队伍 JSON 内容，或选择"从文件选择"');
+                return;
+            }
+            const json = self._parsePartyImportJson(text);
+            if (json) {
+                $overlay.removeClass('active');
+                self.showImportOptionsDialog(json);
+            }
+        });
+
+        // 取消
+        $overlay.find('.dnd-import-dialog-cancel-btn').on('click', () => {
+            $overlay.removeClass('active');
+        });
+    },
+
+    // [新增] 解析并校验队伍导入 JSON（成功返回对象，失败返回 null）
+    _parsePartyImportJson(text) {
+        try {
+            const json = JSON.parse(text);
+            if (!json || !json.party || !Array.isArray(json.party) || json.party.length === 0) {
+                NotificationSystem.error('无效的数据格式或无角色数据');
+                return null;
+            }
+            return json;
+        } catch (err) {
+            Logger.error('Import parse error:', err);
+            NotificationSystem.error('JSON 解析失败，请检查粘贴内容或所选文件');
+            return null;
+        }
     },
 
     // [新增] 显示导入选项对话框 (角色选择 + 导入模式)
     showImportOptionsDialog(jsonData) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const party = jsonData.party || [];
         
         // 构建角色选择区域
@@ -38071,9 +38513,14 @@ ${JSON.stringify(state.characterData, null, 2)}
                 
                 const mode = $overlay.find('input[name="dnd-import-mode"]:checked').val();
                 
-                // 如果是替换模式，显示二次确认
+                // 如果是替换模式，显示二次确认（改用应用内对话框，兼容 iframe/沙箱环境）
                 if (mode === 'replace') {
-                    const confirmReplace = confirm('⚠ 确定要替换当前队伍吗？\n\n这将删除现有的所有队伍数据（包括角色、技能关联和专长关联），然后导入选中的角色。\n\n此操作不可撤销！');
+                    const confirmReplace = await NotificationSystem.confirm('⚠ 确定要替换当前队伍吗？\n\n这将删除现有的所有队伍数据（包括角色、技能关联和专长关联），然后导入选中的角色。\n\n此操作不可撤销！', {
+                        title: '替换队伍确认',
+                        confirmText: '确定替换',
+                        cancelText: '取消',
+                        type: 'warning'
+                    });
                     if (!confirmReplace) return;
                 }
                 
@@ -38131,7 +38578,7 @@ ${JSON.stringify(state.characterData, null, 2)}
 
     // [优化] 渲染快捷物品栏 (只显示装备和消耗品)
     renderQuickInventory($container) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const items = DataManager.getTable('ITEM_Inventory');
         if (!items) return;
         
@@ -38259,7 +38706,7 @@ const DiceRulesInjector = {
     _bindSettingsChanged() {
         if (this._settingsBound) return;
 
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         if (!$) return;
 
         $(document)
@@ -38421,7 +38868,7 @@ const DiceRulesInjector = {
 
 /* harmony default export */ const UISettings = ({
     async renderSettingsPanel($c) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const config = CONFIG.PRESET_SWITCHING;
         const presets = PresetSwitcher.getAvailablePresets();
         const apiConfig = await SettingsManager.getAPIConfig();
@@ -39172,7 +39619,7 @@ const DiceRulesInjector = {
             NotificationSystem.notify(checked ? '已显示迷你地图' : '已隐藏迷你地图', { type: 'success', duration: 2000 });
             
             // 如果当前在 mini 状态，立即重新渲染 HUD
-            const { window: coreWin } = getCore();
+            const { window: coreWin } = Utils_getCore();
             if (coreWin.DND_Dashboard_UI && coreWin.DND_Dashboard_UI.state === 'mini') {
                 coreWin.DND_Dashboard_UI.renderHUD();
             }
@@ -39185,7 +39632,7 @@ const DiceRulesInjector = {
             NotificationSystem.notify(checked ? '已隐藏浮动球' : '已显示浮动球', { type: 'success', duration: 2000 });
             
             // 立即应用设置
-            const { window: coreWin } = getCore();
+            const { window: coreWin } = Utils_getCore();
             if (coreWin.DND_Dashboard_UI) {
                 coreWin.DND_Dashboard_UI.applyFloatingBallVisibility();
             }
@@ -39629,6 +40076,17 @@ const DiceRulesInjector = {
         const properties = item['特性'] || item['properties'] || '';
         const rarity = item['稀有度'] || item['rarity'] || '普通';
         const owner = item['所属人'] || '';
+
+        //change
+        const rarityStyles = {
+            '普通': { bg: 'rgba(255,255,255,0.1)', color: '#aaa' },
+            '优秀': { bg: 'var(--dnd-accent-green)', color: '#fff' },
+            '稀有': { bg: 'var(--dnd-accent-blue)', color: '#fff' },
+            '史诗': { bg: '#9333ea', color: '#fff' },
+            '传说': { bg: 'var(--dnd-border-gold)', color: '#000' },
+            '神器': { bg: 'var(--dnd-accent-red)', color: '#fff' }
+        };
+        const style = rarityStyles[rarity] || { bg: '#444', color: '#ccc' };
         
         // 生成 HTML
         return `
@@ -39650,7 +40108,7 @@ const DiceRulesInjector = {
                 ${properties ? `<div class="dnd-item-props">${properties}</div>` : ''}
                 
                 <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:4px;">
-                    <div class="dnd-item-rarity rarity-${rarity.toLowerCase()}">${rarity}</div>
+                    <div class="dnd-item-rarity" style="background:${style.bg}; color:${style.color}; padding:1px 6px; border-radius:3px; font-size:10px; font-weight:bold; text-transform:uppercase;">${rarity}</div>
                     <div style="display:flex;flex-direction:column;align-items:flex-end;">
                         ${owner ? `<div style="font-size:10px;color:var(--dnd-text-highlight);background:var(--dnd-bg-tertiary);padding:1px 4px;border-radius:2px;margin-bottom:2px;"><i class="fa-solid fa-user"></i> ${owner}</div>` : ''}
                         ${item['重量'] ? `<div style="font-size:11px;color:var(--dnd-text-dim);">${item['重量']} lb</div>` : ''}
@@ -39718,13 +40176,13 @@ const DiceRulesInjector = {
             <div style="margin-top:15px;font-size:10px;color:var(--dnd-text-dim);text-align:right;">ID: ${item['物品ID'] || '-'}</div>
         `;
         
-        const { window: coreWin } = getCore();
+        const { window: coreWin } = Utils_getCore();
         this.showItemDetailPopup(html, event ? event.clientX : coreWin.innerWidth/2, event ? event.clientY : coreWin.innerHeight/2);
     },
 
     showItemDetailPopup(contentHtml, x, y) {
         console.log(`[DND Dashboard] showItemDetailPopup called at ${x},${y}`);
-        const { $, window: coreWin } = getCore();
+        const { $, window: coreWin } = Utils_getCore();
         let $popup = $('#dnd-detail-popup-el');
         let $backdrop = $('#dnd-popup-backdrop-el');
         
@@ -39852,7 +40310,7 @@ const DiceRulesInjector = {
     },
 
     hideDetailPopup() {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         // 隐藏悬浮窗
         $('#dnd-detail-popup-el').removeClass('visible').css('display', 'none');
         // 隐藏遮罩层
@@ -39930,27 +40388,74 @@ const DiceRulesInjector = {
             return;
         }
 
+        const items = DataManager.getTable('ITEM_Inventory') || [];
+        const item = items.find(i => (i['物品ID'] === itemId) || (i['物品名称'] === itemId));
+        const itemName = item ? item['物品名称'] : itemId; // 优先使用名称，找不到则回退 ID
+
         if (action === 'equip') {
             // 获取最新状态
             const items = DataManager.getTable('ITEM_Inventory');
             const item = items.find(i => (i['物品ID'] === itemId) || (i['物品名称'] === itemId));
             if (item) {
                 const isEquipped = item['已装备'] === '是' || item['已装备'] === true || String(item['已装备']).toLowerCase() === 'true';
-                // 装备/卸下操作暂不记录 Log，或可根据需求添加
-                ItemManager.update(itemId, { '已装备': isEquipped ? '否' : '是' });
+                const actionVerb = isEquipped ? '卸下了' : '装备了';
+                
+                const global = DataManager.getTable('SYS_GlobalState');
+                const isCombat = global && global[0] && global[0]['战斗模式'] === '战斗中';
+                const activeChar = this.getControlledCharacter();
+                const charName = activeChar ? activeChar['姓名'] : '我';
+                const charId = activeChar ? (activeChar['CHAR_ID'] || activeChar['PC_ID'] || activeChar['姓名']) : 'default';
+
+                if (isCombat) {
+                    this._actionQueue.push({
+                        type: 'item',
+                        data: { target: null },
+                        desc: `${actionVerb} 【${itemName}】`,
+                        charName: charName,
+                        charId: charId
+                    });
+                    this.renderHUD();
+                    NotificationSystem.success(`已将${actionVerb}动作加入队列`);
+                } else {
+                    this.fillChatInput(`${charName}${actionVerb}了1个${itemName}（${itemId}）`);
+                }
             }
         }
         else if (action === 'use' || action === 'drop') {
             const actionName = action === 'use' ? '使用' : '丢弃';
-            const confirmed = await NotificationSystem.confirm(`确定要${actionName} 1 个 ${itemId} 吗？`, {
+            const confirmed = await NotificationSystem.confirm(`确定要在剧情中${actionName} 1 个 ${itemId} 吗？`, {
                 title: `${actionName}物品`,
                 confirmText: actionName,
                 type: action === 'drop' ? 'danger' : 'info'
             });
+            
             if (confirmed) {
-                // [更新] 生成通知文本并传递给 Update
-                const note = `[系统] 玩家${actionName}了 1x ${itemId}`;
-                ItemManager.update(itemId, { '数量': parseInt(currentQty) - 1 }, note);
+                // [核心修复]：彻底移除 ItemManager.update 删库操作！
+                // 完美对齐 UICombat.js 的队列逻辑，使用 this 直接操作
+                
+                const global = DataManager.getTable('SYS_GlobalState');
+                const isCombat = global && global[0] && global[0]['战斗模式'] === '战斗中';
+                
+                const activeChar = this.getControlledCharacter();
+                const charName = activeChar ? activeChar['姓名'] : '我';
+                const charId = activeChar ? (activeChar['CHAR_ID'] || activeChar['PC_ID'] || activeChar['姓名']) : 'default';
+
+                if (isCombat) {
+                    // 战斗中：加入行动队列
+                    this._actionQueue.push({
+                        type: 'item',
+                        data: { target: null },
+                        desc: `${actionName}了1个${itemName}（${itemId}）`, // 这里的格式将完美契合 commitActions 的拼接
+                        charName: charName,
+                        charId: charId
+                    });
+                    
+                    this.renderHUD(); // 刷新右下角的待执行队列显示
+                    NotificationSystem.success(`已将${itemName}物品加入行动队列`);
+                } else {
+                    // 非战斗中：直接发送提示词
+                    this.fillChatInput(`${charName}${actionName}了1个${itemName}（${itemId}）`);
+                }
             }
         }
     },
@@ -40020,7 +40525,7 @@ const DiceRulesInjector = {
 
     // [新增] 过滤物品列表
     filterInventory() {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const searchText = $('#dnd-inv-search').val().toLowerCase();
         const filterCat = $('#dnd-inv-filter').val();
         
@@ -40132,6 +40637,8 @@ const DiceRulesInjector = {
             };
             const factionType = f['势力类型'] || '其他';
             const typeIcon = typeIcons[factionType] || typeIcons['其他'];
+
+            //原作者: disocrd类脑 Niccole @niccole0414
             
             html += `
                 <div class="dnd-faction-item" style="padding:10px;background:var(--dnd-bg-card);border:1px solid var(--dnd-border-inner);border-radius:6px;">
@@ -40248,13 +40755,9 @@ const DiceRulesInjector = {
         snapshots: {}
     },
 
-    // [新增] 动作经济追踪
-    _turnResources: {
-        action: 1,
-        bonus: 1,
-        reaction: 1,
-        movement: 30 // 默认 30尺
-    },
+
+    _turnResources: {},
+
 
     // [新增] 瞄准模式状态
     _targetingMode: {
@@ -40268,28 +40771,36 @@ const DiceRulesInjector = {
 
     // [新增] 行动队列状态
     _actionQueue: [],
-    _virtualPos: null, // {x, y} 记录移动后的虚拟位置
+    _virtualPosPool: {}, // [修改] 记录每个角色移动后的虚拟位置 { charId: {x, y} }
 
-    // [新增] 手动调整动作资源
+
+    // [修改] 手动调整动作资源（指向当前角色缓存）
     adjustTurnResource(type) {
-        // type: 'action', 'bonus', 'reaction', 'movement'
+        const char = this.getControlledCharacter();
+        const charId = char ? (char['CHAR_ID'] || char['PC_ID'] || char['姓名']) : null;
+        if (!charId || !this._turnResources[charId]) return;
+
         if (type === 'movement') {
-            // 移动力增加 30尺
-            this._turnResources.movement += 30;
-        } else {
-            // 其他资源 +1
-            if (this._turnResources[type] !== undefined) {
-                this._turnResources[type]++;
-            }
+            this._turnResources[charId].movement += 30;
+        } else if (this._turnResources[charId][type] !== undefined) {
+            this._turnResources[charId][type]++;
         }
         this.renderHUD();
         PresetSwitcher.showNotification(true, `已添加资源: ${type}`);
     },
 
-    resetActionEconomy() {
+    resetActionEconomy(charId) {
+        // 如果未传入 charId，尝试获取当前操控者
         const char = this.getControlledCharacter();
+        const targetId = charId || (char ? (char['CHAR_ID'] || char['PC_ID'] || char['姓名']) : null);
+        
+        if (!targetId) return;
+
+        // 如果缓存里已经有这个角色的资源记录且不是强制重置，就不要刷新
+        if (this._turnResources[targetId] && !this._forceReset) return;
+
         // 尝试从属性读取速度
-        let speed = 30;
+        let speed = 30; // 必须先定义初始值
         if (char && char['速度']) {
             const parsed = parseInt(char['速度']);
             if (!isNaN(parsed)) speed = parsed;
@@ -40306,12 +40817,17 @@ const DiceRulesInjector = {
             return defaultVal;
         };
 
-        this._turnResources = {
+        // [核心修改]：只更新当前角色的 ID 槽位，而不是覆盖整个资源对象
+        this._turnResources[targetId] = {
             action: findMax(['每轮动作', 'Actions Per Turn'], 1),
             bonus: findMax(['每轮附赠', 'Bonus Per Turn'], 1),
             reaction: findMax(['每轮反应', 'Reactions Per Turn'], 1),
             movement: speed
         };
+        
+        // 重置完后关闭强制重置标记
+        this._forceReset = false;
+        
         this.renderHUD();
     },
 
@@ -40476,7 +40992,7 @@ const DiceRulesInjector = {
     },
 
     // [新增] 准备施法 (选择环阶)
-    prepareCast(spellName, rangeText, baseLevelStr) {
+    prepareCast(spellName, rangeText, baseLevelStr, costType) {
         // 解析环阶
         let baseLevel = 0;
         if (baseLevelStr && baseLevelStr !== '戏法' && baseLevelStr !== '0') {
@@ -40498,7 +41014,7 @@ const DiceRulesInjector = {
         const limit = Math.max(baseLevel, maxSlot);
 
         // 否则显示环阶选择
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const $popup = $('#dnd-detail-popup-el');
         if ($popup.length) {
             let html = `<div style="font-weight:bold;color:var(--dnd-text-highlight);margin-bottom:10px;text-align:center;">${ICONS.SPARKLES} 选择施法环阶 (${spellName})</div>`;
@@ -40524,7 +41040,7 @@ const DiceRulesInjector = {
                 
                 const action = isDisabled
                     ? ""
-                    : `onclick="window.DND_Dashboard_UI.handleCastClick('${safeName}', '${rangeText}', '${i}', 'spell')"`;
+                    : `onclick="window.DND_Dashboard_UI.handleCastClick('${safeName}', '${rangeText}', '${i}', 'spell','${costType || 'Action'}')"`;
                     
                 const mouseOver = isDisabled
                     ? ""
@@ -40557,8 +41073,30 @@ const DiceRulesInjector = {
     startTargeting(config) {
         Logger.debug('[Targeting] Start config:', config);
         const { type, source, rangeText, skillName, costType } = config;
-        const range = this.parseDistance(rangeText);
+
+        // --- 新增切换逻辑：如果已经是当前模式，则取消 ---
+        if (this._targetingMode.active && this._targetingMode.type === type) {
+            Logger.info('[Targeting] 再次点击相同模式，执行取消');
+            this.endTargeting();
+            return;
+        }
+        // ----------------------------------------------
+
+        //const range = this.parseDistance(rangeText);
         
+        // 获取当前操作角色
+        const activeChar = this.getControlledCharacter();
+        const activeId = activeChar ? (activeChar['CHAR_ID'] || activeChar['PC_ID'] || activeChar['姓名']) : 'default';
+
+        let range;
+        // 如果是移动模式，直接从临时资源缓存池里读。如果池子里没这个人，就解析传入的文本
+        if (type === 'move' && activeId !== 'default' && this._turnResources[activeId]) {
+            range = Math.floor(this._turnResources[activeId].movement / 5);
+            Logger.info(`[Targeting] 移动模式：使用池化资源 ${this._turnResources[activeId].movement}尺 -> ${range}格`);
+        } else {
+            range = this.parseDistance(rangeText);
+        }
+
         // 检查资源是否足够 (提前检查)
         if (type !== 'move' && costType) {
             const key = costType.toLowerCase();
@@ -40571,7 +41109,7 @@ const DiceRulesInjector = {
         this._targetingMode = {
             active: true,
             type: type || 'skill',
-            source: source || null, // 需要包含坐标信息
+            source: source || null, 
             range: range,
             skillName: skillName || '行动',
             costType: costType,
@@ -40580,11 +41118,7 @@ const DiceRulesInjector = {
         
         // 刷新地图以显示范围
         this.renderHUD();
-        
-        // 显示提示
-        const { window: coreWin } = getCore();
-        const msg = type === 'move' ? '请选择移动目标点' : `请选择 ${skillName} 的目标`;
-        this.showItemDetailPopup(`<div style="text-align:center;color:var(--dnd-accent-green);font-weight:bold;">${ICONS.TARGET} ${msg}</div>`, coreWin.innerWidth/2, 100);
+
     },
 
     // [新增] 结束瞄准模式
@@ -40596,12 +41130,44 @@ const DiceRulesInjector = {
         this.hideDetailPopup();
     },
 
-    // [新增] 执行最终动作 (加入队列)
+
+
+    //棋盘坐标转为数字坐标函数
+
+    /**
+     * 棋盘坐标 a7 / h13 → "(x,y)" 数字字符串，仅用于页面展示
+     * @param {string} coordStr 原始coord，如 "a7"
+     * @returns {string}
+     */
+    chessCoordToNumStr(coordStr) {
+        const match = coordStr.match(/^([a-zA-Z]+)(\d+)$/);
+        if (!match) return coordStr;
+
+        const [_, letterRaw, yRaw] = match;
+        const letter = letterRaw.toLowerCase();
+        const y = Number(yRaw);
+
+        let x = 0;
+        for(let i = 0; i < letter.length; i++){
+            x = x * 26 + (letter.charCodeAt(i) - 'a'.charCodeAt(0) + 1);
+        }
+        return `(${x},${y})`;
+    },
+
+
+
+
+
+    // 执行最终动作 (加入队列并扣除临时资源)
     executeAction(type, data, costType) {
         const { x, y, target, distance } = data;
         const activeChar = this.getControlledCharacter();
         const charName = activeChar ? activeChar['姓名'] : '我';
         
+        // 获取该角色的资源缓存引用
+        const activeId = activeChar ? (activeChar['CHAR_ID'] || activeChar['PC_ID'] || activeChar['姓名']) : 'default';
+        const resCache = (activeId && this._turnResources[activeId]) ? this._turnResources[activeId] : null;
+
         const coord = `${String.fromCharCode(64 + x)}${y}`;
         let desc = '';
         
@@ -40609,98 +41175,97 @@ const DiceRulesInjector = {
         const skillName = (this._targetingMode.skillName || '').toLowerCase();
         let extraDesc = '';
         
-        // 疾走 (Dash): 消耗动作(由costType处理)，增加移动力
+        // 疾走 (Dash): 增加缓存中的移动力
         if (skillName.includes('dash') || skillName.includes('疾走') || skillName.includes('冲刺')) {
             const speed = parseInt(activeChar['速度']) || 30;
-            this._turnResources.movement += speed;
+            if (resCache) resCache.movement += speed;
             extraDesc = ` (疾走: +${speed}尺移动)`;
         }
         
-        // 动作如潮 (Action Surge): 增加动作
+        // 动作如潮: 增加缓存中的动作
         if (skillName.includes('action surge') || skillName.includes('动作如潮')) {
-            this._turnResources.action++;
+            if (resCache) resCache.action++;
             extraDesc = ` (动作如潮: +1 动作)`;
         }
 
         // 扣除资源
         if (type === 'move') {
-            // 移动消耗 (每格5尺)
             const cost = (distance || 0) * 5;
-            if (this._turnResources.movement < cost) {
-                NotificationSystem.warning(`移动距离不足！剩余: ${this._turnResources.movement}尺, 需要: ${cost}尺`);
-                return; // 阻止执行
+            if (resCache && resCache.movement < cost) {
+                NotificationSystem.warning(`移动距离不足！剩余: ${resCache.movement}尺, 需要: ${cost}尺`);
+                return;
             }
-            this._turnResources.movement -= cost;
-            desc = `移动到了 ${coord} (消耗 ${cost}尺)`;
-            // 更新虚拟位置
-            this._virtualPos = { x, y };
-        } else {
-            // 动作/附赠/反应消耗
-            let key = (costType || 'Action').toLowerCase();
+            if (resCache) resCache.movement -= cost;
+
+
+            //调用棋盘坐标转为数字坐标
+            desc = `移动到了 ${this.chessCoordToNumStr(coord)}`;
             
-            // 动作如潮本身不消耗动作 (Free)
+            // [修改] 更新当前角色的虚拟位置
+            this._virtualPosPool[activeId] = { x, y };
+        } else {
+            let key = (costType || 'Action').toLowerCase();
             if (skillName.includes('action surge') || skillName.includes('动作如潮')) {
                 key = 'free';
             }
 
-            if (this._turnResources[key] !== undefined) {
-                if (this._turnResources[key] <= 0) {
+            if (resCache && resCache[key] !== undefined) {
+                if (resCache[key] <= 0) {
                     NotificationSystem.warning(`没有足够的 ${costType}！`);
-                    return; // 阻止执行
+                    return;
                 }
-                this._turnResources[key]--;
+                resCache[key]--;
             }
             
             const skill = this._targetingMode.skillName;
             if (target) {
                 desc = `对 ${target} 施放了 【${skill}】${extraDesc}`;
             } else {
-                desc = `在 ${coord} 施放了 【${skill}】${extraDesc}`;
+                //调用棋盘坐标转为数字坐标
+                desc = `在 ${this.chessCoordToNumStr(coord)} 施放了 【${skill}】${extraDesc}`;
             }
         }
         
-        // 加入队列
-        this._actionQueue.push({ type, data, desc, charName });
+        // 加入队列 (增加 charId 和 charName 供 commit 分组使用)
+        this._actionQueue.push({ type, data, desc, charName, charId: activeId });
         
         // 刷新界面
         this.renderHUD();
     },
 
-    // [新增] 提交行动队列
+    // [修改] 提交行动队列 (支持多角色分组输出)
     commitActions() {
         if (this._actionQueue.length === 0) return;
         
-        // 获取行动的主体名称
-        const first = this._actionQueue[0];
-        const charName = first.charName || '我';
+        // 按角色名分组
+        const groups = {};
+        this._actionQueue.forEach(item => {
+            if (!groups[item.charName]) groups[item.charName] = [];
+            groups[item.charName].push(item.desc);
+        });
+
+        // 生成最终提示词串
+        const messages = Object.entries(groups).map(([name, steps]) => {
+            const actionStr = steps.length === 1 ? steps[0] : steps.join('，然后 ');
+            return `轮到${name}的回合时，${actionStr}。`;
+        });
         
-        // 合并文本
-        const steps = this._actionQueue.map(a => a.desc);
-        let actionStr = '';
-        
-        if (steps.length === 1) {
-            actionStr = steps[0];
-        } else {
-            actionStr = steps.join('，然后 ');
-        }
-        
-        // 使用用户指定的特定前缀格式 (轮到[角色名]的回合时)
-        const finalStr = `轮到${charName}的回合时，${actionStr}。`;
-        
-        this.fillChatInput(finalStr);
+        this.fillChatInput(messages.join(' '));
         this.clearActions();
     },
 
-    // [新增] 清空行动队列
+    // [修改] 清空行动队列时，彻底清空整个资源缓存池和位置池
     clearActions() {
         this._actionQueue = [];
-        this._virtualPos = null;
-        this.resetActionEconomy(); // 重置动作经济
+        this._virtualPosPool = {}; // 清理所有角色的虚拟位置
+        this._turnResources = {}; // 重置所有角色的临时资源
+        this._forceReset = true;  // 标记需要重新从表格读取
+        this.resetActionEconomy(); 
     },
 
     // 显示战斗单位详情
     showCombatUnitDetail(unit, event) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         
         // 解析 HP
         const hpStr = unit['HP状态'] || '??/??';
@@ -40748,6 +41313,13 @@ const DiceRulesInjector = {
     // [新增] 显示战斗技能列表 (当前操控角色技能)
     showCombatSkillList(event) {
         console.log('[DND Dashboard] showCombatSkillList called');
+
+                // --- 新增：针对第四阶段（瞄准中）的取消逻辑 ---
+        if (this._targetingMode && this._targetingMode.active) {
+            Logger.info('[Skill] 处于瞄准模式，再次点击大按钮执行取消');
+            this.endTargeting(); // 调用现成的结束瞄准函数，它会自动清理地图效果和提示文字
+            return; // 直接返回，不再执行下面打开列表的逻辑
+        }
         
         // 获取当前操控的角色
         const current = this.getControlledCharacter();
@@ -41337,7 +41909,7 @@ ${structureJSON}
 
     // [新增] 绑定地图缩放事件 (增强版：支持 Pointer Events 拖拽平移)
     bindMapZoom($container, $innerMap) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const self = this; // [修复] 在函数开头定义 self，确保所有内部函数可以访问
         const state = this._mapZoom;
         const containerEl = $container[0]; // 获取原生 DOM 元素
@@ -41392,17 +41964,21 @@ ${structureJSON}
             // 忽略右键
             if (e.button === 2) return;
             
-            // [修复] 检查是否应该禁用拖拽 (瞄准模式或点击 Token)
+            const isMiddleButton = e.button === 1; // 识别中键/滚轮按下
+            const isLeftButton = e.button === 0;   // 识别左键按下
+
+            // 检查点击目标
             const clickTarget = document.elementFromPoint(e.clientX, e.clientY);
             const $clickTarget = $(clickTarget);
             const isOnToken = $clickTarget.closest('.dnd-minimap-token').length > 0;
             const isTargeting = self._targetingMode && self._targetingMode.active;
             
-            if (isOnToken || isTargeting) {
-                // 禁用拖拽，让原生 click 事件正常触发
+            // 逻辑：只有当【左键】点击在【Token上】或【处于瞄准模式】时，才禁用拖拽以执行点击/交互。
+            // 如果是中键，或者是非交互区的左键，均会跳过此判断，继续执行下方的平移代码。
+            if (isLeftButton && (isOnToken || isTargeting)) {
                 dragDisabled = true;
-                console.log('[MapZoom] Drag disabled - isOnToken:', isOnToken, 'isTargeting:', isTargeting);
-                return; // 不调用 preventDefault，让 click 事件正常传播
+                console.log('[MapZoom] 左键交互优先，禁用平移');
+                return; // 不调用 preventDefault，让原生 click/targeting 逻辑触发
             }
             
             dragDisabled = false;
@@ -41540,7 +42116,7 @@ ${structureJSON}
     },
 
     async renderMiniMap($el) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const global = DataManager.getTable('SYS_GlobalState');
         const gInfo = (global && global[0]) ? global[0] : {};
         const isCombat = gInfo['战斗模式'] === '战斗中';
@@ -41965,8 +42541,11 @@ ${structureJSON}
         $innerMap.find('.dnd-map-overlay').remove();
         
         const activeChar = this.getControlledCharacter();
+        const activeId = activeChar ? (activeChar['CHAR_ID'] || activeChar['PC_ID'] || activeChar['姓名']) : 'default';
         let sourcePos = { x: 0, y: 0 };
         let sourceFound = false;
+
+        
         let realPos = null;
 
         if (encounters && activeChar) {
@@ -41977,15 +42556,17 @@ ${structureJSON}
             if (activeUnit) {
                 const token = mapData.find(m => m['类型'] === 'Token' && m['单位名称'] === activeUnit['单位名称']);
                 if (token) {
+
+
                     const p = DataManager.parseValue(token['坐标'], 'coord');
                     if (p) realPos = { x: p.x || 1, y: p.y || 1 };
                 }
             }
         }
 
-        if (this._virtualPos) {
-            sourcePos = { ...this._virtualPos };
-            sourceFound = true;
+        if (activeId !== 'default' && this._virtualPosPool && this._virtualPosPool[activeId]) {
+            sourcePos = { ...this._virtualPosPool[activeId] };
+            sourceFound = true; // [修复] 必须标记已找到源头位置，否则下方不会渲染测距圈
             // 渲染虚拟位置 (Ghost)
             const vPxX = (sourcePos.x - 1) * cellSize;
             const vPxY = (sourcePos.y - 1) * cellSize;
@@ -42026,7 +42607,7 @@ ${structureJSON}
 
     // [新增] 重新生成地图 (Wrapper for onclick)
     async regenerateMap(locationName, mode) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const global = DataManager.getTable('SYS_GlobalState');
         const isCombat = global && global[0] && global[0]['战斗模式'] === '战斗中';
         
@@ -42103,16 +42684,18 @@ ${structureJSON}
         const encounters = DataManager.getTable('COMBAT_Encounter');
         const mapData = DataManager.getTable('COMBAT_BattleMap');
         const activeChar = this.getControlledCharacter();
-        
+        const activeId = activeChar ? (activeChar['CHAR_ID'] || activeChar['PC_ID'] || activeChar['姓名']) : 'default';
+
         // --- A. 瞄准模式 ---
         if (state.active) {
             // 1. 计算距离
             let dist = 999;
             let sourcePos = { x: 0, y: 0 };
             
-            // 获取源头位置 (优先使用虚拟位置，即移动后的位置)
-            if (this._virtualPos) {
-                sourcePos = { ...this._virtualPos };
+
+            // 获取源头位置 (优先使用当前角色的虚拟位置池)
+            if (activeId && this._virtualPosPool && this._virtualPosPool[activeId]) {
+                sourcePos = { ...this._virtualPosPool[activeId] };
             } else if (encounters && activeChar) {
                 // [修复] 尝试模糊匹配名称
                 let activeUnit = encounters.find(u => u['单位名称'] === activeChar['姓名']);
@@ -42174,7 +42757,7 @@ ${structureJSON}
             </div>
         `;
         // 计算屏幕坐标显示菜单
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const $hud = $('#dnd-mini-hud');
         const hudRect = $hud[0].getBoundingClientRect();
         this.showItemDetailPopup(menuHtml, hudRect.left + hudRect.width/2, hudRect.top + hudRect.height/2);
@@ -42222,7 +42805,7 @@ ${structureJSON}
     formatSpellSlots(slotsVal, isMini = false) {
         try {
             // 注入 BG3 风格样式 (如果尚未存在)
-            const { $ } = getCore();
+            const { $ } = Utils_getCore();
             if ($('#dnd-spell-styles').length === 0) {
                 const style = `
                     <style id="dnd-spell-styles">
@@ -42393,7 +42976,7 @@ ${structureJSON}
 
     // [新增] 过滤法术列表
     filterSpells() {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const searchText = $('#dnd-spell-search').val().toLowerCase();
         const filterLevel = $('#dnd-spell-filter').val();
         
@@ -42556,7 +43139,7 @@ ${structureJSON}
 
     // 手动刷新骰子池
     async refreshDicePool() {
-        const { $, window: coreWin } = getCore();
+        const { $, window: coreWin } = Utils_getCore();
         
         // 显示加载状态
         const $poolArea = $('#dnd-detail-popup-el').find('.dnd-dice-pool-visual');
@@ -42578,7 +43161,7 @@ ${structureJSON}
 
     // 投掷骰子并显示结果
     rollDice(sides, event) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         
         // [美化] 添加骰子滚动动画到点击的按钮
         if (event && event.target) {
@@ -42592,6 +43175,23 @@ ${structureJSON}
         const result = Math.floor(Math.random() * sides) + 1;
         const isNat20 = sides === 20 && result === 20;
         const isNat1 = sides === 20 && result === 1;
+
+        // 自动填入提示词到输入框 (区分大成功/大失败)
+        const char = (typeof this.getControlledCharacter === 'function') ? this.getControlledCharacter() : null;
+        const charName = char ? (char['姓名'] || '我') : '我';
+        
+        let diceText = '';
+        if (isNat20) {
+            diceText = `\n${charName}进行了 D20 检定，*掷骰结果:【大成功 (Natural 20)】！`;
+        } else if (isNat1) {
+            diceText = `\n${charName}进行了 D20 检定，*掷骰结果:【大失败 (Natural 1)】！`;
+        } else {
+            diceText = `\n${charName}进行了 D${sides} 检定，*掷骰结果:${result}。`;
+        }
+        
+        if (typeof this.fillChatInput === 'function') {
+            this.fillChatInput(diceText);
+        }
         
         // [美化] 增强结果显示动画
         let resultHtml = '';
@@ -42641,7 +43241,7 @@ ${structureJSON}
 
     // 自定义骰子表达式投掷
     rollCustomDice() {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const expr = $('#dnd-custom-dice').val().trim();
         if (!expr) return;
         
@@ -42676,6 +43276,14 @@ ${structureJSON}
             
             const rollsStr = rolls.join(' + ');
             const modStr = modifier > 0 ? ` + ${modifier}` : (modifier < 0 ? ` - ${Math.abs(modifier)}` : '');
+
+            // 自动填入自定义投掷提示词到输入框
+            const char = (typeof this.getControlledCharacter === 'function') ? this.getControlledCharacter() : null;
+            const charName = char ? (char['姓名'] || '我') : '我';
+            const customText = `\n${charName}进行了 ${expr.toUpperCase()} 投掷，结果为：${total} (${rollsStr}${modStr})。`;
+            if (typeof this.fillChatInput === 'function') {
+                this.fillChatInput(customText);
+            }
             
             const resultHtml = `<div style="text-align:center;padding:15px;">
                 <div style="font-size:32px;color:var(--dnd-text-highlight);">${ICONS.DICE} ${total}</div>
@@ -42704,7 +43312,7 @@ ${structureJSON}
     _quickBarCloseHandler: null,
 
     toggleQuickBar(forceState = null) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         
         if (forceState !== null) {
             this.quickBarState = forceState;
@@ -42725,7 +43333,7 @@ ${structureJSON}
     },
 
     async renderQuickBar(providedSlots = null) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const $bar = $('#dnd-quick-bar');
         if (!$bar.length) return;
         
@@ -42780,8 +43388,10 @@ ${structureJSON}
         }
     },
 
+    //原作者: disocrd类脑 Niccole @niccole0414
+
     showQuickSlotSelector() {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         
         // 获取数据
         const items = DataManager.getTable('ITEM_Inventory') || [];
@@ -42851,14 +43461,14 @@ ${structureJSON}
             </div>
         `;
         
-        const { window: coreWin } = getCore();
+        const { window: coreWin } = Utils_getCore();
         const winW = coreWin.innerWidth || $(coreWin).width();
         const winH = coreWin.innerHeight || $(coreWin).height();
         this.showItemDetailPopup(html, winW/2 - 150, winH/2 - 200);
     },
 
     switchQuickTab(tabName) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         $('.dnd-tab-btn').css({borderBottomColor:'transparent', color:'var(--dnd-text-dim)'}).removeClass('active');
         $(`.dnd-tab-btn[data-tab="${tabName}"]`).css({borderBottomColor:'var(--dnd-border-gold)', color:'var(--dnd-text-main)'}).addClass('active');
         
@@ -42868,7 +43478,7 @@ ${structureJSON}
 
     // [新增] 处理添加点击 (从 data 属性读取)
     handleAddClick(el) {
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const $el = $(el);
         Logger.info('handleAddClick triggered for:', $el.data('name'));
         this.addQuickSlot(
@@ -42916,7 +43526,7 @@ ${structureJSON}
             });
 
         // 反馈提示
-        const { $ } = getCore();
+        const { $ } = Utils_getCore();
         const $hud = $('#dnd-mini-hud');
         const $toast = $('<div style="position:absolute;bottom:10px;left:50%;transform:translateX(-50%);background:var(--dnd-bg-tertiary);color:var(--dnd-text-main);padding:5px 10px;border-radius:4px;font-size:12px;z-index:9999;border:1px solid var(--dnd-border-gold);">已添加</div>');
         $hud.append($toast);
@@ -42972,7 +43582,7 @@ ${structureJSON}
                     this.fillChatInput(`我${action}：${slot.data.name}`);
                 } else {
                     // 升环/等级选择
-                    const { $, window: coreWin } = getCore();
+                    const { $, window: coreWin } = Utils_getCore();
                     const winW = coreWin.innerWidth || $(coreWin).width();
                     const winH = coreWin.innerHeight || $(coreWin).height();
                     
@@ -43059,7 +43669,7 @@ const UIRenderer = Object.assign({},
 
 // Make UIRenderer globally available as expected by onclick handlers in generated HTML
 try {
-    const { window: globalWin } = getCore();
+    const { window: globalWin } = Utils_getCore();
     if (globalWin) {
         console.log('[DND Dashboard] Exposing UIRenderer to global window (Module Scope)');
         globalWin.DND_Dashboard_UI = UIRenderer;
@@ -43104,7 +43714,7 @@ try {
 
     const init = () => {
         Logger.info('init() 开始执行');
-        const { $, getDB } = getCore();
+        const { $, getDB } = Utils_getCore();
         
         Logger.debug('jQuery 状态:', !!$, $ ? $.fn.jquery : 'N/A');
         
@@ -43207,7 +43817,8 @@ try {
     };
 
     // 启动逻辑
-    const { $ } = getCore();
+    //原作者: disocrd类脑 Niccole @niccole0414
+    const { $ } = Utils_getCore();
     if ($) {
         $(document).ready(init);
     } else {

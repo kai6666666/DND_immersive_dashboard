@@ -4501,6 +4501,7 @@ export const STYLE_PRESETS = {
     },
 
     // 9. 玫瑰庭院 (优雅、浪漫) - 玫瑰粉、深色背景、成熟优雅
+    //原作者: disocrd类脑 Niccole @niccole0414
     'rose-garden': {
         meta: {
             id: 'rose-garden',

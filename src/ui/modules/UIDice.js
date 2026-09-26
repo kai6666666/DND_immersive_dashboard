@@ -166,6 +166,23 @@ export default {
         const result = Math.floor(Math.random() * sides) + 1;
         const isNat20 = sides === 20 && result === 20;
         const isNat1 = sides === 20 && result === 1;
+
+        // 自动填入提示词到输入框 (区分大成功/大失败)
+        const char = (typeof this.getControlledCharacter === 'function') ? this.getControlledCharacter() : null;
+        const charName = char ? (char['姓名'] || '我') : '我';
+        
+        let diceText = '';
+        if (isNat20) {
+            diceText = `\n${charName}进行了 D20 检定，*掷骰结果:【大成功 (Natural 20)】！`;
+        } else if (isNat1) {
+            diceText = `\n${charName}进行了 D20 检定，*掷骰结果:【大失败 (Natural 1)】！`;
+        } else {
+            diceText = `\n${charName}进行了 D${sides} 检定，*掷骰结果:${result}。`;
+        }
+        
+        if (typeof this.fillChatInput === 'function') {
+            this.fillChatInput(diceText);
+        }
         
         // [美化] 增强结果显示动画
         let resultHtml = '';
@@ -250,6 +267,14 @@ export default {
             
             const rollsStr = rolls.join(' + ');
             const modStr = modifier > 0 ? ` + ${modifier}` : (modifier < 0 ? ` - ${Math.abs(modifier)}` : '');
+
+            // 自动填入自定义投掷提示词到输入框
+            const char = (typeof this.getControlledCharacter === 'function') ? this.getControlledCharacter() : null;
+            const charName = char ? (char['姓名'] || '我') : '我';
+            const customText = `\n${charName}进行了 ${expr.toUpperCase()} 投掷，结果为：${total} (${rollsStr}${modStr})。`;
+            if (typeof this.fillChatInput === 'function') {
+                this.fillChatInput(customText);
+            }
             
             const resultHtml = `<div style="text-align:center;padding:15px;">
                 <div style="font-size:32px;color:var(--dnd-text-highlight);">${ICONS.DICE} ${total}</div>
@@ -353,6 +378,8 @@ export default {
             Logger.error('Quick slots load error', e);
         }
     },
+
+    //原作者: disocrd类脑 Niccole @niccole0414
 
     showQuickSlotSelector() {
         const { $ } = getCore();

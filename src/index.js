@@ -133,6 +133,7 @@ import { DiceRulesInjector } from './features/DiceRulesInjector.js';
     };
 
     // 启动逻辑
+    //原作者: disocrd类脑 Niccole @niccole0414
     const { $ } = getCore();
     if ($) {
         $(document).ready(init);

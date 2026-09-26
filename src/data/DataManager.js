@@ -6,11 +6,74 @@ export const DataManager = {
     // [新增] 查找表键名 (模糊匹配)
     findTableKey: (rawData, nameFragment) => {
         if (!rawData) return null;
+        
+        // 19 张核心业务表的【英文 / 拼音 / 中文】映射字典
+        const aliasMap = {
+            // 1. 系统与全局
+            'SYS_GlobalState': '全局状态', 'SYS_GlobalStatus': '全局状态', 'quanjuzhuangtai': '全局状态',
+            
+            // 2. NPC管理
+            'NPC_Registry': 'NPC', 'npczhuce': 'NPC',
+            
+            // 3. 物品与背包
+            'ITEM_Inventory': '背包', 'beibao': '背包',
+            
+            // 4. 任务系统
+            'QUEST_Active': '任务', 'QUESTTracker': '任务', 'renwu': '任务',
+            
+            // 5. 阵营势力
+            'FACTION_Standing': '势力', 'shilishengwang': '势力',
+            
+            // 6. 战斗遭遇
+            'COMBAT_Encounter': '战斗遭遇', 'zhandouzaoyu': '战斗遭遇',
+            
+            // 7. 战术地图
+            'COMBAT_BattleMap': '战斗地图', 'zhandouditu': '战斗地图',
+            
+            // 8. 轮次纪要
+            'LOG_Summary': '纪要', 'jiyaobiao': '纪要',
+            
+            // 9. 行动选项
+            'UI_ActionOptions': '行动选项', 'xingdongxuanxiang': '行动选项',
+            
+            // 10. 随机数骰子池
+            'DICE_Pool': '骰子池', 'touzichi': '骰子池',
+            
+            // 11. 技能法术库
+            'SKILL_Library': '技能/法术库', 'jinengfashuku': '技能/法术库', 'jinengku': '技能', 'fashuku': '法术',
+            
+            // 12. 角色技能关联
+            'CHARACTER_Skills': '角色技能关联', 'juesejinengguanlian': '角色技能关联', 'jinengguanlian': '技能关联',
+            
+            // 13. 专长特性库
+            'FEAT_Library': '专长库', 'zhuanchangku': '专长库', 'texingku': '专长库',
+            
+            // 14. 角色专长关联
+            'CHARACTER_Feats': '角色专长关联', 'juesezhuanchangguanlian': '角色专长关联', 'zhuanchangguanlian': '专长关联',
+            
+            // 15. 角色档案
+            'CHARACTER_Registry': '角色表', 'juesebiao': '角色表', 'juesezhuce': '角色表',
+            
+            // 16. 角色战斗属性
+            'CHARACTER_Attributes': '角色属性', 'jueseshuxing': '角色属性',
+            
+            // 17. 角色资源池
+            'CHARACTER_Resources': '角色资源', 'jueseziyuan': '角色资源',
+            
+            // 18. 探索地图数据
+            'EXPLORATION_MapData': '探索地图数据', 'tansuoditushuju': '探索地图数据',
+            
+            // 19. 战斗地图绘制
+            'COMBAT_Map_Visuals': '战斗地图绘制', 'zhandoudituhuizhi': '战斗地图绘制'
+        };
+
+        const target = aliasMap[nameFragment] || nameFragment;
+
         return Object.keys(rawData).find(k =>
-            k === nameFragment ||
-            k.includes(nameFragment) ||
-            (rawData[k].name && rawData[k].name.includes(nameFragment))
-        );
+            k.toLowerCase().includes(nameFragment.toLowerCase()) ||
+            (rawData[k].uid && rawData[k].uid.toLowerCase().includes(nameFragment.toLowerCase())) ||
+            (rawData[k].name && rawData[k].name.includes(target))
+        ) || null;
     },
 
     // [新增] 在数据对象中应用系统通知 (不立即保存)
@@ -153,20 +216,21 @@ export const DataManager = {
         return rows.map(row => {
             const obj = {};
             headers.forEach((h, i) => {
-                if (h) obj[h] = row[i];
+                if (h) {
+                    obj[h] = row[i];
+                    obj[String(h).trim().toLowerCase()] = row[i]; // 自动注入小写键 (如 char_id)
+                    obj[String(h).trim().toUpperCase()] = row[i]; // 自动注入大写键 (如 CHAR_ID)
+                }
             });
             return obj;
         });
     },
 
     getTable: (tableNameFragment) => {
-        const data = DataManager.getAllData();
-        if (!data) return null;
-        
-        const key = Object.keys(data).find(k => k.includes(tableNameFragment) || (data[k].name && data[k].name.includes(tableNameFragment)));
-        if (!key) return null;
-        
-        return DataManager.parseSheet(data[key]);
+    const data = DataManager.getAllData();
+    if (!data) return null;
+    const key = DataManager.findTableKey(data, tableNameFragment);
+    return key ? DataManager.parseSheet(data[key]) : null;
     },
 
     getPartyData: () => {
@@ -201,7 +265,7 @@ export const DataManager = {
         if (!links || !library) return [];
 
         // 兼容：尝试通过 ID 查找，或者通过名称查找
-        let charLinks = links.filter(l => l['CHAR_ID'] === charId);
+        let charLinks = links.filter(l => l['char_id'] === charId);
         
         // 如果按 ID 没找到，尝试按姓名
         if (charLinks.length === 0) {
@@ -209,12 +273,12 @@ export const DataManager = {
              const char = party.find(p => p['姓名'] === charId);
              if (char) {
                  const realId = char['CHAR_ID'];
-                 charLinks = links.filter(l => l['CHAR_ID'] === realId);
+                 charLinks = links.filter(l => l['char_id'] === realId);
              }
         }
         
         return charLinks.map(link => {
-            const skill = library.find(s => s['SKILL_ID'] === link['SKILL_ID']);
+            const skill = library.find(s => s['skill_id'] === link['skill_id']);
             return { ...link, ...skill };
         });
     },
@@ -225,19 +289,19 @@ export const DataManager = {
         
         if (!links || !library) return [];
 
-        let charLinks = links.filter(l => l['CHAR_ID'] === charId);
+        let charLinks = links.filter(l => l['char_id'] === charId);
         
         if (charLinks.length === 0) {
              const party = DataManager.getPartyData();
              const char = party.find(p => p['姓名'] === charId);
              if (char) {
                  const realId = char['CHAR_ID'];
-                 charLinks = links.filter(l => l['CHAR_ID'] === realId);
+                 charLinks = links.filter(l => l['char_id'] === realId);
              }
         }
         
         return charLinks.map(link => {
-            const feat = library.find(f => f['FEAT_ID'] === link['FEAT_ID']);
+            const feat = library.find(f => f['feat_id'] === link['feat_id']);
             return { ...link, ...feat };
         });
     },
@@ -259,20 +323,20 @@ export const DataManager = {
         if (!links || !library) return [];
 
         // 筛选该角色的技能关联
-        let charLinks = links.filter(l => l['CHAR_ID'] === charId);
+        let charLinks = links.filter(l => l['char_id'] === charId);
         
         if (charLinks.length === 0) {
              const party = DataManager.getPartyData();
              const char = party.find(p => p['姓名'] === charId);
              if (char) {
                  const realId = char['CHAR_ID'];
-                 charLinks = links.filter(l => l['CHAR_ID'] === realId);
+                 charLinks = links.filter(l => l['char_id'] === realId);
              }
         }
         
         const spells = [];
         charLinks.forEach(link => {
-            const skill = library.find(s => s['SKILL_ID'] === link['SKILL_ID']);
+            const skill = library.find(s => s['skill_id'] === link['skill_id']);
             // 判断是否为法术 (仅当技能类型明确为'法术'时)
             // [修复] 移除对环阶的宽松判断，防止 '武技' 被误判为法术
             if (skill && skill['技能类型'] === '法术') {
@@ -464,17 +528,24 @@ export const DataManager = {
                 if (!sheet || !sheet.content || sheet.content.length < 1) return;
                 
                 const headers = sheet.content[0];
-                // 尝试找到 ID 列 (CHAR_ID 或 PC_ID 或 姓名)
-                let idColName = 'CHAR_ID';
-                if (headers.includes('PC_ID')) idColName = 'PC_ID';
-                else if (headers.includes('姓名') && !headers.includes('CHAR_ID')) idColName = '姓名';
-                
+                // [修复] 尝试找到 ID 列（兼容 CHAR_ID / char_id / PC_ID / pc_id / 姓名 等不同模板写法）
+                let idColName = null;
+                for (const cand of ['CHAR_ID', 'char_id', 'PC_ID', 'pc_id']) {
+                    if (headers.includes(cand)) { idColName = cand; break; }
+                }
+                if (!idColName && headers.includes('姓名')) idColName = '姓名';
+                if (!idColName) return;
+
                 const idIdx = headers.indexOf(idColName);
                 if (idIdx === -1) return;
 
                 dataList.forEach(item => {
-                    // 确定该条目的 ID
-                    const itemId = item[idColName] || item['CHAR_ID'] || item['姓名'];
+                    // [修复] 确定该条目的 ID（兼容导出数据与目标表之间的大小写差异）
+                    const itemId = item[idColName] !== undefined ? item[idColName]
+                        : (item['CHAR_ID'] !== undefined ? item['CHAR_ID']
+                        : (item['char_id'] !== undefined ? item['char_id']
+                        : (item['PC_ID'] !== undefined ? item['PC_ID']
+                        : (item['pc_id'] !== undefined ? item['pc_id'] : item['姓名']))));
                     if (!itemId) return;
 
                     // 在表中查找对应行
@@ -489,18 +560,33 @@ export const DataManager = {
                     }
 
                     if (rowIdx !== -1) {
-                        // 更新: 遍历 header，如果 item 中有对应字段则更新
+                        // [修复] 更新: 遍历 header，兼容大小写键（如 char_id / CHAR_ID）
                         headers.forEach((h, colIdx) => {
-                            if (item[h] !== undefined) {
-                                sheet.content[rowIdx][colIdx] = item[h];
+                            let v = item[h];
+                            if (v === undefined && typeof h === 'string') {
+                                v = item[h.toLowerCase()];
+                                if (v === undefined) v = item[h.toUpperCase()];
+                            }
+                            if (v !== undefined) {
+                                sheet.content[rowIdx][colIdx] = v;
                             }
                         });
                     } else {
-                        // 插入: 构建新行
-                        const newRow = headers.map(h => item[h] !== undefined ? item[h] : null);
-                        // 确保 ID 存在
-                        if (item[idColName] !== undefined) {
-                            newRow[idIdx] = item[idColName];
+                        // [修复] 插入: 构建新行（兼容大小写键）
+                        const newRow = headers.map(h => {
+                            let v = item[h];
+                            if (v === undefined && typeof h === 'string') {
+                                v = item[h.toLowerCase()];
+                                if (v === undefined) v = item[h.toUpperCase()];
+                            }
+                            return v !== undefined ? v : null;
+                        });
+                        // [修复] 确保 ID 存在（兼容大小写差异）
+                        const idVal = item[idColName] !== undefined ? item[idColName]
+                            : (item['CHAR_ID'] !== undefined ? item['CHAR_ID']
+                            : (item['char_id'] !== undefined ? item['char_id'] : item['姓名']));
+                        if (idVal !== undefined) {
+                            newRow[idIdx] = idVal;
                         }
                         sheet.content.push(newRow);
                     }
@@ -564,8 +650,8 @@ export const DataManager = {
                         }
                         
                         // 2. 处理关联 (Link)
-                        const linkCharColIdx = linkHeaders.indexOf('CHAR_ID');
-                        const linkItemColIdx = linkHeaders.indexOf(idField);
+                        const linkCharColIdx = linkHeaders.findIndex(h => ['char_id', 'CHAR_ID'].includes(String(h).trim()));
+                        const linkItemColIdx = linkHeaders.findIndex(h => [idField.toLowerCase(), idField.toUpperCase(), idField].includes(String(h).trim()));
                         
                         if (linkCharColIdx !== -1 && linkItemColIdx !== -1) {
                             // 检查是否已存在关联
@@ -575,9 +661,18 @@ export const DataManager = {
                             
                             if (!linkExists) {
                                 const newLinkRow = linkHeaders.map(h => {
-                                    if (h === 'LINK_ID') return 'LNK_' + Math.random().toString(36).substr(2, 8);
-                                    if (h === 'CHAR_ID') return charId;
-                                    if (h === idField) return itemId;
+                                    const col = String(h).trim().toLowerCase();
+                                    // 1. 生成关联主键 (SLINK_xxx 或 FLINK_xxx)
+                                    if (['skill_link_id', 'feat_link_id', 'link_id'].includes(col)) {
+                                        return (idField.toLowerCase().includes('skill') ? 'SLINK_' : 'FLINK_') + Math.random().toString(36).substr(2, 6);
+                                    }
+                                    // 2. 匹配角色 ID 列 (char_id / CHAR_ID)
+                                    if (col === 'char_id') return charId;
+                                    // 3. 匹配技能/专长 ID 列 (skill_id / feat_id)
+                                    if (col === idField.toLowerCase() || col === idField.toUpperCase()) return itemId;
+                                    // 4. 技能关联表默认设为已准备
+                                    if (col === '已准备' || col === 'yi_zhun_bei') return '是';
+                                    
                                     return item[h] !== undefined ? item[h] : null;
                                 });
                                 linkSheet.content.push(newLinkRow);
@@ -762,6 +857,8 @@ export const DataManager = {
                 });
             }
 
+            //原作者: disocrd类脑 Niccole @niccole0414
+
             // 豁免
             const saves = [];
             Object.keys(abilities).forEach(k => {
@@ -928,5 +1025,87 @@ export const DataManager = {
             console.error('[DND DataManager] FVTT 导入失败:', err);
             return { success: false, message: '解析或保存失败: ' + err.message };
         }
-    }
+    },
+
+    // [新增] 在数据库中动态切换主角身份
+    updateMainCharacterInDB: async (targetCharId) => {
+        try {
+            const api = DataManager.getAPI();
+            if (!api) return { success: false, message: 'API 不可用' };
+
+            // 1. 获取当前完整数据
+            const rawData = DataManager.getAllData();
+            const tableKey = DataManager.findTableKey(rawData, 'CHARACTER_Registry');
+            if (!tableKey) return { success: false, message: '未找到角色注册表' };
+
+            const sheet = rawData[tableKey];
+            const headers = sheet.content[0];
+            const idIdx = headers.indexOf('CHAR_ID');
+            const typeIdx = headers.indexOf('成员类型');
+
+            if (idIdx === -1 || typeIdx === -1) return { success: false, message: '表结构异常' };
+
+            // 2. 遍历并修改：目标设为主角，其他设为同伴
+            let updatedCount = 0;
+            for (let i = 1; i < sheet.content.length; i++) {
+                const charId = sheet.content[i][idIdx];
+                if (charId === targetCharId) {
+                    sheet.content[i][typeIdx] = '主角';
+                    updatedCount++;
+                } else {
+                    // 如果原本是主角，则降级为同伴
+                    if (sheet.content[i][typeIdx] === '主角') {
+                        sheet.content[i][typeIdx] = '同伴';
+                    }
+                }
+            }
+
+            // 3. 写回数据库
+            await api.importTableAsJson(JSON.stringify(rawData));
+            console.log(`[DataManager] 数据库同步成功：已将 ${targetCharId} 设为主角`);
+            return { success: true };
+        } catch (err) {
+            console.error('[DataManager] 同步主角状态失败:', err);
+            return { success: false, message: err.message };
+        }
+    },
+
+
+
+
+    // [新增] 同步/创建酒馆用户角色 直接调用酒馆内核 API 同步/创建用户角色
+    syncSTUserPersona: async (name) => {
+        if (!name) return;
+        try {
+            // 1. 获取酒馆全局 Context
+            const core = getCore();
+            const stContext = window.SillyTavern?.getContext?.() || core?.getContext?.() || (typeof SillyTavern !== 'undefined' ? SillyTavern.getContext?.() : null);
+
+            // 2. 优先通过官方 Slash Command 切换 (/persona "角色名")
+            if (stContext && typeof stContext.executeSlashCommands === 'function') {
+                console.log(`[DataManager] 触发酒馆官方斜杠命令切换用户角色: ${name}`);
+                await stContext.executeSlashCommands(`/persona ${JSON.stringify(name)}`);
+                return;
+            }
+
+            // 3. 兜底方案：通过 DOM 模拟点击酒馆原生用户角色列表
+            const { $ } = getCore();
+            if ($) {
+                const $targetCard = $(`#persona_list .persona_item[title="${name}"], #persona_list .persona_item:contains("${name}")`);
+                if ($targetCard.length) {
+                    $targetCard.first().trigger('click');
+                    console.log(`[DataManager] 通过 DOM 模拟点击切换用户角色: ${name}`);
+                    return;
+                }
+            }
+
+            console.warn('[DataManager] 未找到可用的酒馆 Persona 切换接口');
+        } catch (err) {
+            console.error('[DataManager] 酒馆 Persona 切换失败:', err);
+        }
+    },
+
+    getAPI: () => getCore().getDB(),
+
+
 };

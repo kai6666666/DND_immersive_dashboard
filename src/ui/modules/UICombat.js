@@ -11,13 +11,9 @@ export default {
         snapshots: {}
     },
 
-    // [新增] 动作经济追踪
-    _turnResources: {
-        action: 1,
-        bonus: 1,
-        reaction: 1,
-        movement: 30 // 默认 30尺
-    },
+
+    _turnResources: {},
+
 
     // [新增] 瞄准模式状态
     _targetingMode: {
@@ -31,28 +27,36 @@ export default {
 
     // [新增] 行动队列状态
     _actionQueue: [],
-    _virtualPos: null, // {x, y} 记录移动后的虚拟位置
+    _virtualPosPool: {}, // [修改] 记录每个角色移动后的虚拟位置 { charId: {x, y} }
 
-    // [新增] 手动调整动作资源
+
+    // [修改] 手动调整动作资源（指向当前角色缓存）
     adjustTurnResource(type) {
-        // type: 'action', 'bonus', 'reaction', 'movement'
+        const char = this.getControlledCharacter();
+        const charId = char ? (char['CHAR_ID'] || char['PC_ID'] || char['姓名']) : null;
+        if (!charId || !this._turnResources[charId]) return;
+
         if (type === 'movement') {
-            // 移动力增加 30尺
-            this._turnResources.movement += 30;
-        } else {
-            // 其他资源 +1
-            if (this._turnResources[type] !== undefined) {
-                this._turnResources[type]++;
-            }
+            this._turnResources[charId].movement += 30;
+        } else if (this._turnResources[charId][type] !== undefined) {
+            this._turnResources[charId][type]++;
         }
         this.renderHUD();
         PresetSwitcher.showNotification(true, `已添加资源: ${type}`);
     },
 
-    resetActionEconomy() {
+    resetActionEconomy(charId) {
+        // 如果未传入 charId，尝试获取当前操控者
         const char = this.getControlledCharacter();
+        const targetId = charId || (char ? (char['CHAR_ID'] || char['PC_ID'] || char['姓名']) : null);
+        
+        if (!targetId) return;
+
+        // 如果缓存里已经有这个角色的资源记录且不是强制重置，就不要刷新
+        if (this._turnResources[targetId] && !this._forceReset) return;
+
         // 尝试从属性读取速度
-        let speed = 30;
+        let speed = 30; // 必须先定义初始值
         if (char && char['速度']) {
             const parsed = parseInt(char['速度']);
             if (!isNaN(parsed)) speed = parsed;
@@ -69,12 +73,17 @@ export default {
             return defaultVal;
         };
 
-        this._turnResources = {
+        // [核心修改]：只更新当前角色的 ID 槽位，而不是覆盖整个资源对象
+        this._turnResources[targetId] = {
             action: findMax(['每轮动作', 'Actions Per Turn'], 1),
             bonus: findMax(['每轮附赠', 'Bonus Per Turn'], 1),
             reaction: findMax(['每轮反应', 'Reactions Per Turn'], 1),
             movement: speed
         };
+        
+        // 重置完后关闭强制重置标记
+        this._forceReset = false;
+        
         this.renderHUD();
     },
 
@@ -239,7 +248,7 @@ export default {
     },
 
     // [新增] 准备施法 (选择环阶)
-    prepareCast(spellName, rangeText, baseLevelStr) {
+    prepareCast(spellName, rangeText, baseLevelStr, costType) {
         // 解析环阶
         let baseLevel = 0;
         if (baseLevelStr && baseLevelStr !== '戏法' && baseLevelStr !== '0') {
@@ -287,7 +296,7 @@ export default {
                 
                 const action = isDisabled
                     ? ""
-                    : `onclick="window.DND_Dashboard_UI.handleCastClick('${safeName}', '${rangeText}', '${i}', 'spell')"`;
+                    : `onclick="window.DND_Dashboard_UI.handleCastClick('${safeName}', '${rangeText}', '${i}', 'spell','${costType || 'Action'}')"`;
                     
                 const mouseOver = isDisabled
                     ? ""
@@ -320,8 +329,30 @@ export default {
     startTargeting(config) {
         Logger.debug('[Targeting] Start config:', config);
         const { type, source, rangeText, skillName, costType } = config;
-        const range = this.parseDistance(rangeText);
+
+        // --- 新增切换逻辑：如果已经是当前模式，则取消 ---
+        if (this._targetingMode.active && this._targetingMode.type === type) {
+            Logger.info('[Targeting] 再次点击相同模式，执行取消');
+            this.endTargeting();
+            return;
+        }
+        // ----------------------------------------------
+
+        //const range = this.parseDistance(rangeText);
         
+        // 获取当前操作角色
+        const activeChar = this.getControlledCharacter();
+        const activeId = activeChar ? (activeChar['CHAR_ID'] || activeChar['PC_ID'] || activeChar['姓名']) : 'default';
+
+        let range;
+        // 如果是移动模式，直接从临时资源缓存池里读。如果池子里没这个人，就解析传入的文本
+        if (type === 'move' && activeId !== 'default' && this._turnResources[activeId]) {
+            range = Math.floor(this._turnResources[activeId].movement / 5);
+            Logger.info(`[Targeting] 移动模式：使用池化资源 ${this._turnResources[activeId].movement}尺 -> ${range}格`);
+        } else {
+            range = this.parseDistance(rangeText);
+        }
+
         // 检查资源是否足够 (提前检查)
         if (type !== 'move' && costType) {
             const key = costType.toLowerCase();
@@ -334,7 +365,7 @@ export default {
         this._targetingMode = {
             active: true,
             type: type || 'skill',
-            source: source || null, // 需要包含坐标信息
+            source: source || null, 
             range: range,
             skillName: skillName || '行动',
             costType: costType,
@@ -343,11 +374,7 @@ export default {
         
         // 刷新地图以显示范围
         this.renderHUD();
-        
-        // 显示提示
-        const { window: coreWin } = getCore();
-        const msg = type === 'move' ? '请选择移动目标点' : `请选择 ${skillName} 的目标`;
-        this.showItemDetailPopup(`<div style="text-align:center;color:var(--dnd-accent-green);font-weight:bold;">${ICONS.TARGET} ${msg}</div>`, coreWin.innerWidth/2, 100);
+
     },
 
     // [新增] 结束瞄准模式
@@ -359,12 +386,44 @@ export default {
         this.hideDetailPopup();
     },
 
-    // [新增] 执行最终动作 (加入队列)
+
+
+    //棋盘坐标转为数字坐标函数
+
+    /**
+     * 棋盘坐标 a7 / h13 → "(x,y)" 数字字符串，仅用于页面展示
+     * @param {string} coordStr 原始coord，如 "a7"
+     * @returns {string}
+     */
+    chessCoordToNumStr(coordStr) {
+        const match = coordStr.match(/^([a-zA-Z]+)(\d+)$/);
+        if (!match) return coordStr;
+
+        const [_, letterRaw, yRaw] = match;
+        const letter = letterRaw.toLowerCase();
+        const y = Number(yRaw);
+
+        let x = 0;
+        for(let i = 0; i < letter.length; i++){
+            x = x * 26 + (letter.charCodeAt(i) - 'a'.charCodeAt(0) + 1);
+        }
+        return `(${x},${y})`;
+    },
+
+
+
+
+
+    // 执行最终动作 (加入队列并扣除临时资源)
     executeAction(type, data, costType) {
         const { x, y, target, distance } = data;
         const activeChar = this.getControlledCharacter();
         const charName = activeChar ? activeChar['姓名'] : '我';
         
+        // 获取该角色的资源缓存引用
+        const activeId = activeChar ? (activeChar['CHAR_ID'] || activeChar['PC_ID'] || activeChar['姓名']) : 'default';
+        const resCache = (activeId && this._turnResources[activeId]) ? this._turnResources[activeId] : null;
+
         const coord = `${String.fromCharCode(64 + x)}${y}`;
         let desc = '';
         
@@ -372,93 +431,92 @@ export default {
         const skillName = (this._targetingMode.skillName || '').toLowerCase();
         let extraDesc = '';
         
-        // 疾走 (Dash): 消耗动作(由costType处理)，增加移动力
+        // 疾走 (Dash): 增加缓存中的移动力
         if (skillName.includes('dash') || skillName.includes('疾走') || skillName.includes('冲刺')) {
             const speed = parseInt(activeChar['速度']) || 30;
-            this._turnResources.movement += speed;
+            if (resCache) resCache.movement += speed;
             extraDesc = ` (疾走: +${speed}尺移动)`;
         }
         
-        // 动作如潮 (Action Surge): 增加动作
+        // 动作如潮: 增加缓存中的动作
         if (skillName.includes('action surge') || skillName.includes('动作如潮')) {
-            this._turnResources.action++;
+            if (resCache) resCache.action++;
             extraDesc = ` (动作如潮: +1 动作)`;
         }
 
         // 扣除资源
         if (type === 'move') {
-            // 移动消耗 (每格5尺)
             const cost = (distance || 0) * 5;
-            if (this._turnResources.movement < cost) {
-                NotificationSystem.warning(`移动距离不足！剩余: ${this._turnResources.movement}尺, 需要: ${cost}尺`);
-                return; // 阻止执行
+            if (resCache && resCache.movement < cost) {
+                NotificationSystem.warning(`移动距离不足！剩余: ${resCache.movement}尺, 需要: ${cost}尺`);
+                return;
             }
-            this._turnResources.movement -= cost;
-            desc = `移动到了 ${coord} (消耗 ${cost}尺)`;
-            // 更新虚拟位置
-            this._virtualPos = { x, y };
-        } else {
-            // 动作/附赠/反应消耗
-            let key = (costType || 'Action').toLowerCase();
+            if (resCache) resCache.movement -= cost;
+
+
+            //调用棋盘坐标转为数字坐标
+            desc = `移动到了 ${this.chessCoordToNumStr(coord)}`;
             
-            // 动作如潮本身不消耗动作 (Free)
+            // [修改] 更新当前角色的虚拟位置
+            this._virtualPosPool[activeId] = { x, y };
+        } else {
+            let key = (costType || 'Action').toLowerCase();
             if (skillName.includes('action surge') || skillName.includes('动作如潮')) {
                 key = 'free';
             }
 
-            if (this._turnResources[key] !== undefined) {
-                if (this._turnResources[key] <= 0) {
+            if (resCache && resCache[key] !== undefined) {
+                if (resCache[key] <= 0) {
                     NotificationSystem.warning(`没有足够的 ${costType}！`);
-                    return; // 阻止执行
+                    return;
                 }
-                this._turnResources[key]--;
+                resCache[key]--;
             }
             
             const skill = this._targetingMode.skillName;
             if (target) {
                 desc = `对 ${target} 施放了 【${skill}】${extraDesc}`;
             } else {
-                desc = `在 ${coord} 施放了 【${skill}】${extraDesc}`;
+                //调用棋盘坐标转为数字坐标
+                desc = `在 ${this.chessCoordToNumStr(coord)} 施放了 【${skill}】${extraDesc}`;
             }
         }
         
-        // 加入队列
-        this._actionQueue.push({ type, data, desc, charName });
+        // 加入队列 (增加 charId 和 charName 供 commit 分组使用)
+        this._actionQueue.push({ type, data, desc, charName, charId: activeId });
         
         // 刷新界面
         this.renderHUD();
     },
 
-    // [新增] 提交行动队列
+    // [修改] 提交行动队列 (支持多角色分组输出)
     commitActions() {
         if (this._actionQueue.length === 0) return;
         
-        // 获取行动的主体名称
-        const first = this._actionQueue[0];
-        const charName = first.charName || '我';
+        // 按角色名分组
+        const groups = {};
+        this._actionQueue.forEach(item => {
+            if (!groups[item.charName]) groups[item.charName] = [];
+            groups[item.charName].push(item.desc);
+        });
+
+        // 生成最终提示词串
+        const messages = Object.entries(groups).map(([name, steps]) => {
+            const actionStr = steps.length === 1 ? steps[0] : steps.join('，然后 ');
+            return `轮到${name}的回合时，${actionStr}。`;
+        });
         
-        // 合并文本
-        const steps = this._actionQueue.map(a => a.desc);
-        let actionStr = '';
-        
-        if (steps.length === 1) {
-            actionStr = steps[0];
-        } else {
-            actionStr = steps.join('，然后 ');
-        }
-        
-        // 使用用户指定的特定前缀格式 (轮到[角色名]的回合时)
-        const finalStr = `轮到${charName}的回合时，${actionStr}。`;
-        
-        this.fillChatInput(finalStr);
+        this.fillChatInput(messages.join(' '));
         this.clearActions();
     },
 
-    // [新增] 清空行动队列
+    // [修改] 清空行动队列时，彻底清空整个资源缓存池和位置池
     clearActions() {
         this._actionQueue = [];
-        this._virtualPos = null;
-        this.resetActionEconomy(); // 重置动作经济
+        this._virtualPosPool = {}; // 清理所有角色的虚拟位置
+        this._turnResources = {}; // 重置所有角色的临时资源
+        this._forceReset = true;  // 标记需要重新从表格读取
+        this.resetActionEconomy(); 
     },
 
     // 显示战斗单位详情
@@ -511,6 +569,13 @@ export default {
     // [新增] 显示战斗技能列表 (当前操控角色技能)
     showCombatSkillList(event) {
         console.log('[DND Dashboard] showCombatSkillList called');
+
+                // --- 新增：针对第四阶段（瞄准中）的取消逻辑 ---
+        if (this._targetingMode && this._targetingMode.active) {
+            Logger.info('[Skill] 处于瞄准模式，再次点击大按钮执行取消');
+            this.endTargeting(); // 调用现成的结束瞄准函数，它会自动清理地图效果和提示文字
+            return; // 直接返回，不再执行下面打开列表的逻辑
+        }
         
         // 获取当前操控的角色
         const current = this.getControlledCharacter();

@@ -201,16 +201,44 @@ export default {
             if (scheduleRetry) this._scheduleHelperButtonRetry();
         }
     },
-
+    
     setControlledCharacter(charId) {
+        const oldCharId = this._controlledCharId;
+
+
+        //获取操纵角色的名字
+        const party = DataManager.getPartyData();
+        const char = party.find(p => p['CHAR_ID'] === charId || p['PC_ID'] === charId || p['姓名'] === charId);
+
         this._controlledCharId = charId;
-        // [修复] 先初始化追踪器快照，再渲染HUD，防止显示错误的资源消耗
+        
+        // [修复] 切换角色时，通知战斗模块保存旧资源并加载/重置新角色资源
+        if (typeof this.switchTurnContext === 'function') {
+            this.switchTurnContext(oldCharId, charId);
+        } else if (typeof this.resetActionEconomy === 'function') {
+            // 如果没有编写复杂的切换逻辑，至少要重置一次动作经济以刷新速度
+            this.resetActionEconomy();
+        }
+        
         if (this.initResourceTracker) this.initResourceTracker();
+
+        //在数据库内切换主角
+        if (charId && DataManager.updateMainCharacterInDB) {
+            DataManager.updateMainCharacterInDB(charId);
+        }
+
+
+        //在酒馆原生用户角色中切换主角
+        if (char && char['姓名'] && DataManager.syncSTUserPersona) {
+            DataManager.syncSTUserPersona(char['姓名']);
+        }
+
         // 刷新战斗HUD
         this.renderHUD();
         // 显示切换通知
         PresetSwitcher.showNotification(true, `已切换操控: ${charId || '默认'}`);
     },
+
 
     getControlledCharacter() {
         if (this._controlledCharId) {

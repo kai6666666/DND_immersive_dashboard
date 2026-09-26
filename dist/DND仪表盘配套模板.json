@@ -1,8 +1,7 @@
 {
   "mate": {
     "type": "chatSheets",
-    "version": 1,
-    "updateConfigUiSentinel": -1,
+    "version": 2,
     "globalInjectionConfig": {
       "readableEntryPlacement": {
         "position": "before_character_definition",
@@ -28,7 +27,7 @@
     },
     "content": [
       [
-        null,
+        "row_id",
         "当前场景",
         "场景描述",
         "游戏时间",
@@ -92,7 +91,7 @@
     },
     "content": [
       [
-        null,
+        "row_id",
         "NPC_ID",
         "姓名",
         "种族/性别/年龄",
@@ -161,7 +160,7 @@
     },
     "content": [
       [
-        null,
+        "row_id",
         "物品ID",
         "物品名称",
         "类别",
@@ -228,7 +227,7 @@
     },
     "content": [
       [
-        null,
+        "row_id",
         "任务ID",
         "任务名称",
         "类型",
@@ -292,7 +291,7 @@
     },
     "content": [
       [
-        null,
+        "row_id",
         "势力ID",
         "势力名称",
         "势力类型",
@@ -359,7 +358,7 @@
     },
     "content": [
       [
-        null,
+        "row_id",
         "单位名称",
         "阵营",
         "先攻/位置",
@@ -409,7 +408,8 @@
         "position": "at_depth_as_system",
         "depth": 2,
         "order": 99991
-      }
+      },
+      "injectIntoWorldbook": false
     },
     "orderNo": 5
   },
@@ -425,7 +425,7 @@
     },
     "content": [
       [
-        null,
+        "row_id",
         "单位名称",
         "类型",
         "坐标",
@@ -472,7 +472,8 @@
         "position": "at_depth_as_system",
         "depth": 2,
         "order": 99991
-      }
+      },
+      "injectIntoWorldbook": false
     },
     "orderNo": 6
   },
@@ -488,7 +489,7 @@
     },
     "content": [
       [
-        null,
+        "row_id",
         "时间跨度",
         "地点",
         "纪要",
@@ -510,7 +511,7 @@
       "entryType": "keyword",
       "keywords": "编码索引",
       "preventRecursion": true,
-      "injectionTemplate": "<记忆回溯>\n$1\n</记忆回溯>",
+      "injectionTemplate": "<历史信息概要>\n$1\n</历史信息概要>",
       "extraIndexEnabled": true,
       "extraIndexEntryName": "纪要索引",
       "extraIndexColumns": [
@@ -521,16 +522,16 @@
         "概览": "index_only",
         "编码索引": "both"
       },
-      "extraIndexInjectionTemplate": "<已发生的事件概览>\n$1\n</已发生的事件概览>",
+      "extraIndexInjectionTemplate": "<历史信息概要索引>\n$1\n</历史信息概要索引>",
       "entryPlacement": {
         "position": "at_depth_as_system",
         "depth": 999,
-        "order": 10000
+        "order": 10010
       },
       "extraIndexPlacement": {
         "position": "at_depth_as_system",
-        "depth": 1000,
-        "order": 10010
+        "depth": 999,
+        "order": 10000
       },
       "fixedEntryPlacement": {
         "position": "at_depth_as_system",
@@ -557,7 +558,7 @@
     },
     "content": [
       [
-        null,
+        "row_id",
         "选项A",
         "选项B",
         "选项C",
@@ -620,7 +621,7 @@
     },
     "content": [
       [
-        null,
+        "row_id",
         "ID",
         "D4",
         "D6",
@@ -667,323 +668,10 @@
         "position": "at_depth_as_system",
         "depth": 2,
         "order": 99991
-      }
+      },
+      "injectIntoWorldbook": false
     },
     "orderNo": 9
-  },
-  "sheet_EXPLORATION_Map_Data": {
-    "uid": "sheet_EXPLORATION_Map_Data",
-    "name": "🗺️ 探索地图数据",
-    "sourceData": {
-      "note": "【探索地图结构表】存储每个场景的地图结构数据（JSON格式）。\n你是一个拥有建筑学学位的资深DND地牢架构师。请根据 LocationName（作为主题）及所属 IP 风格，设计一个紧凑、工整且富有环境叙事的地牢平面图。\n\n关键设计原则：\n1. **网格吸附系统**：为了保证工整，所有房间的坐标(x,y)和尺寸(width,height) **必须是 25 或 50 的整数倍**。\n2. **物理拓扑**：房间之间必须物理紧邻（间隙为0），形成闭环。严禁出现细长的无效缝隙。\n3. **走廊实体化**：走廊(corridor)必须是拥有真实坐标(x,y,w,h)的长条形房间，绝不能是抽象连线。\n4. **门与通道**：门必须精确计算坐标，位于两个房间的**共享边**上。\n5. **IP沉浸式布局**：房间命名和形状应反映当前地点的历史背景（如：废弃实验室应有破碎的窗户和绿色毒雾颜色）。\n\n请生成一个至少包含 **8-12个区域**（房间+走廊）的复杂结构，确保有一个明确的入口和一个位于深处的Boss区域。\n| 列名 | 类型 | 说明 |\n|------|------|------|\n| LocationName | pk | 场景名称（对应全局状态表的“当前场景”） |\n| MapStructureJSON | text | 只有结构数据的JSON字符串（严格执行网格对齐） |\n| LastUpdated | datetime | 最后生成时间 |\n| 当前显示地图 | enum | [是/否]，强制显示该地图，忽略全局场景 |\n\n【JSON结构定义】MapStructureJSON 必须符合以下 Schema：\n{\n  \"mapName\": \"地图名称 (e.g. 影牙城堡-下层)\",\n  \"mapSize\": { \"width\": 1000, \"height\": 800 },\n  \"rooms\": [\n    {\n      \"id\": \"room_1\",\n      \"name\": \"入口大厅/仪式大厅/军械库\",\n      \"type\": \"entrance/corridor/room/hall/secret_room/boss_arena/shop\",\n      \"shape\": \"rectangular/L-shaped/cross/circular/cave_blob (人工建筑多用几何体，自然洞穴用 irregular)\",\n      \"x\": 100, \"y\": 100, \"width\": 200, \"height\": 150,\n      \"description\": \"详细的环境描写（光影、气味、声音）...\",\n      \"color\": \"#hex (符合环境氛围的色调，如深红、幽蓝)\"\n    }\n  ],\n  \"doors\": [\n    {\n      \"x\": 300, \"y\": 175,\n      \"type\": \"open/door/secret_door/barred/magic_barrier\",\n      \"orientation\": \"horizontal/vertical\",\n      \"connects\": [\"room_1\", \"room_2\"]\n    }\n  ],\n  \"features\": [\n    {\n      \"x\": 150, \"y\": 150,\n      \"type\": \"column/statue/chest/trap/fountain/table/altar/terminal\"\n    }\n  ]\n}",
-      "initNode": "【初始化】如果游戏开始时主角已处于某个地牢/探索区域，应用下方【insertNode】的逻辑生成该区域的初始地图。",
-      "updateNode": "【触发条件】通常不更新结构。除非剧情导致地形发生巨大改变（如塌方、魔法重塑、发现新房间），此时重新执行生成逻辑。",
-      "insertNode": "【触发条件】当主角进入一个新的探索区域时触发。作为资深DND地牢架构师及Lore专家，请根据 LocationName（作为主题）设计一个紧凑、真实且富有叙事感的地牢平面图结构。\n\n## 核心思维流（CoT）：\n1. **IP检索与风格分析**：首先分析 LocationName。如果它属于著名IP（如生化危机、黑暗之魂、DND模组、魔兽世界等）或特定历史风格，**立即调用内部知识库**检索其典型布局、房间命名习惯及环境氛围。\n2. **功能区划**：不要随机堆砌。按照“入口缓冲区 -> 枢纽区 -> 功能分支 -> 核心/Boss区”的建筑逻辑规划。\n3. **几何网格化**：想象一个虚拟网格。所有房间的坐标(x,y)和尺寸(w,h)必须是整数且尽量对齐，确保地图看起来工整、专业。\n\n## 关键设计原则：\n1. **无缝模块化**：房间与房间之间必须物理“贴合”（坐标紧邻），形成一个闭环的建筑群，杜绝孤岛。\n2. **走廊实体化**：Corridor（走廊）必须是具有真实坐标(x,y,w,h)的长条形房间实体，绝不能是抽象的连线。\n3. **复杂的连通性**：避免单一直线流程。设计环路、捷径和分支，使得地图具有探索深度。\n4. **IP化命名**：房间名称应贴合设定（例如：若是生化危机主题，使用“S.T.A.R.S.办公室”而非“房间A”；若是魔幻主题，使用“奥术凝视大厅”而非“大房间”）。\n5. **不规则中的秩序**：虽然布局可以不对称，但边缘应整齐，避免出现无意义的细长缝隙。\n\n## 生成要求：\n- **数量强制**：必须包含 **8-12 个** 独立的探索区域（房间+走廊）。\n- **结构完整**：明确标记入口（Entrance）和深处的Boss区域/关键剧情点。\n- **数据格式**：\n  - 严格输出符合 Note 中定义的 JSON Schema。\n  - 确保坐标数值精确，互不重叠但紧密相连。\n  - 将完整的 JSON 字符串输出到 `MapStructureJSON` 字段。\n  - 获取当前时间并填入 `LastUpdated`。\n\n现在，开始构建 [{{LocationName}}] 的地图数据：",
-      "deleteNode": "【触发条件】当主角彻底离开该区域且短期内不会返回时，可删除以节省空间。"
-    },
-    "content": [
-      [
-        null,
-        "LocationName",
-        "MapStructureJSON",
-        "LastUpdated",
-        "当前显示地图"
-      ]
-    ],
-    "updateConfig": {
-      "batchSize": 3,
-      "uiSentinel": -1,
-      "groupId": 3
-    },
-    "exportConfig": {
-      "enabled": false,
-      "splitByRow": false,
-      "entryName": "探索地图数据",
-      "entryType": "constant",
-      "keywords": "",
-      "preventRecursion": true,
-      "injectionTemplate": "",
-      "extraIndexEnabled": false,
-      "extraIndexEntryName": "🗺️ 探索地图数据-索引",
-      "extraIndexColumns": [],
-      "extraIndexColumnModes": {},
-      "extraIndexInjectionTemplate": "",
-      "entryPlacement": {
-        "position": "at_depth_as_system",
-        "depth": 2,
-        "order": 10000
-      },
-      "extraIndexPlacement": {
-        "position": "at_depth_as_system",
-        "depth": 2,
-        "order": 10010
-      },
-      "fixedEntryPlacement": {
-        "position": "at_depth_as_system",
-        "depth": 2,
-        "order": 99990
-      },
-      "fixedIndexPlacement": {
-        "position": "at_depth_as_system",
-        "depth": 2,
-        "order": 99991
-      }
-    },
-    "orderNo": 17
-  },
-  "sheet_COMBAT_Map_Visuals": {
-    "uid": "sheet_COMBAT_Map_Visuals",
-    "name": "🖌️ 战斗地图绘制",
-    "sourceData": {
-      "note": "【战斗地图视觉表】存储战斗场景的视觉结构数据，用于生成底图。与COMBAT_BattleMap配合，后者存逻辑(墙/怪)，此表存视觉(地面/装饰)。\n\n| 列名 | 类型 | 说明 |\n|------|------|------|\n| SceneName | pk | 场景名称，通常对应全局状态的“当前场景” |\n| VisualJSON | text | 视觉结构数据(JSON)，包含地面材质、装饰物等 |\n| GridSize | string | 网格尺寸，格式: 20x20 |\n| LastUpdated | datetime | 最后更新时间 |\n\n【VisualJSON结构定义】\n{\n  \"mapName\": \"场景名\",\n  \"dimensions\": { \"width\": 20, \"height\": 20 },\n  \"ground\": \"grass/stone/wood_plank/water/lava/snow...\",\n  \"terrain_objects\": [\n    {\n      \"type\": \"tree/rock/wall/pillar/water_pool/furniture/rubble...\",\n      \"x\": 1, \"y\": 1, \"w\": 1, \"h\": 1,\n      \"rotation\": 0,\n      \"description\": \"描述\",\n      \"tactical\": \"cover/block/difficult\"\n    }\n  ]\n}",
-      "initNode": "【初始化】无需预填。",
-      "updateNode": "【触发条件】当战斗场景的环境发生重大视觉变化时更新。",
-      "insertNode": "【触发条件】当进入一场战斗，且该场景尚未在此表中存在记录时，根据正文剧情的环境描述生成视觉数据。\n操作指南：\n1. 提取剧情中的环境要素（如：酒馆地板是木质的，角落有翻倒的桌子）。\n2. 生成符合JSON格式的VisualJSON。\n3. GridSize 默认为 20x20，除非剧情暗示了极小或极大的空间。\n4. 这是生成地图底图的关键依据。",
-      "deleteNode": "【触发条件】场景不再需要或地图数据过旧时删除。"
-    },
-    "content": [
-      [
-        null,
-        "SceneName",
-        "VisualJSON",
-        "GridSize",
-        "LastUpdated"
-      ]
-    ],
-    "updateConfig": {
-      "batchSize": 3,
-      "uiSentinel": -1,
-      "groupId": 3
-    },
-    "exportConfig": {
-      "enabled": false,
-      "splitByRow": false,
-      "entryName": "战斗绘制",
-      "entryType": "constant",
-      "keywords": "",
-      "preventRecursion": true,
-      "injectionTemplate": "",
-      "extraIndexEnabled": false,
-      "extraIndexEntryName": "🖌️ 战斗地图绘制-索引",
-      "extraIndexColumns": [],
-      "extraIndexColumnModes": {},
-      "extraIndexInjectionTemplate": "",
-      "entryPlacement": {
-        "position": "at_depth_as_system",
-        "depth": 2,
-        "order": 10000
-      },
-      "extraIndexPlacement": {
-        "position": "at_depth_as_system",
-        "depth": 2,
-        "order": 10010
-      },
-      "fixedEntryPlacement": {
-        "position": "at_depth_as_system",
-        "depth": 2,
-        "order": 99990
-      },
-      "fixedIndexPlacement": {
-        "position": "at_depth_as_system",
-        "depth": 2,
-        "order": 99991
-      }
-    },
-    "orderNo": 18
-  },
-  "sheet_CHARACTER_Registry": {
-    "uid": "sheet_CHARACTER_Registry",
-    "name": "👤 角色表",
-    "sourceData": {
-      "note": "【角色统一管理表】记录主角和队伍成员的基础信息。主角ID固定为PC_MAIN，队友ID格式为ALLY_XXX。\n\n| 列名 | 类型 | 说明 |\n|------|------|------|\n| CHAR_ID | pk | 主键，**主角固定为PC_MAIN**，队友为ALLY_XXX |\n| 成员类型 | enum | [主角/同伴/宠物/召唤物/魔宠/随从] |\n| 姓名 | string | 角色全名 |\n| 种族/性别/年龄 | string | 基础信息 |\n| 职业 | string | 职业及子职，如：圣武士(复仇誓言) Lv5 |\n| 外貌描述 | text | 详细的外貌特征描写 |\n| 性格特点 | text | 核心性格、理想、牵绊、缺陷 |\n| 背景故事 | text | 角色背景，主角最多500字，队友最多300字 |\n| 加入时间 | datetime | 主角为游戏开始时间，队友为加入队伍时间 |",
-      "initNode": "【初始化】\n1. 必须创建主角行，CHAR_ID=PC_MAIN，成员类型=主角\n2. 根据用户提供的角色信息填写主角数据\n3. 根据剧情设定填写初始队友信息",
-      "updateNode": "【触发条件】\n- 职业升级时更新职业列\n- 经历重大事件后追加背景故事（主角控制在500字内，队友300字内）\n- 外貌变化时更新描述",
-      "insertNode": "【严格限制】\n- 主角行：禁止插入，初始化时已创建\n- 队友：只有在NPC明确表达加入意愿，并且被玩家明确接受后，方可添加",
-      "deleteNode": "【触发条件】\n- 主角行：禁止删除\n- 队友：永久离队、死亡或背叛时删除"
-    },
-    "content": [
-      [
-        null,
-        "CHAR_ID",
-        "成员类型",
-        "姓名",
-        "种族/性别/年龄",
-        "职业",
-        "外貌描述",
-        "性格特点",
-        "背景故事",
-        "加入时间"
-      ]
-    ],
-    "updateConfig": {
-      "batchSize": 1,
-      "uiSentinel": -1,
-      "groupId": 1
-    },
-    "exportConfig": {
-      "enabled": true,
-      "splitByRow": true,
-      "entryName": "角色信息",
-      "entryType": "constant",
-      "keywords": "",
-      "preventRecursion": true,
-      "injectionTemplate": "",
-      "extraIndexEnabled": false,
-      "extraIndexEntryName": "👤 角色表-索引",
-      "extraIndexColumns": [],
-      "extraIndexColumnModes": {},
-      "extraIndexInjectionTemplate": "",
-      "entryPlacement": {
-        "position": "at_depth_as_system",
-        "depth": 2,
-        "order": 10000
-      },
-      "extraIndexPlacement": {
-        "position": "at_depth_as_system",
-        "depth": 2,
-        "order": 10010
-      },
-      "fixedEntryPlacement": {
-        "position": "at_depth_as_system",
-        "depth": 2,
-        "order": 99990
-      },
-      "fixedIndexPlacement": {
-        "position": "at_depth_as_system",
-        "depth": 2,
-        "order": 99991
-      }
-    },
-    "orderNo": 14
-  },
-  "sheet_CHARACTER_Attributes": {
-    "uid": "sheet_CHARACTER_Attributes",
-    "name": "📊 角色属性",
-    "sourceData": {
-      "note": "【角色属性表】记录所有角色的完整战斗数据。每个角色一行，通过CHAR_ID关联。\n\n| 列名 | 类型 | 格式示例 |\n|------|------|------|\n| CHAR_ID | fk | 外键，关联角色表(PC_MAIN或ALLY_XXX) |\n| 等级 | int | 总等级数字 |\n| HP | ratio | 当前/最大，如：45/52 |\n| AC | int | 护甲等级数值 |\n| 先攻加值 | int | 敏捷调整值+其他加值 |\n| 速度 | string | 如：30尺(6格) |\n| 属性值 | string | {\"STR\":16,\"DEX\":14,\"CON\":14,\"INT\":10,\"WIS\":12,\"CHA\":8} |\n| 豁免熟练 | string | 如：[\"力量\",\"体质\"] |\n| 技能熟练 | string | 如：[\"运动\",\"威吓\",\"宗教\"] |\n| 被动感知 | int | 10+感知调整值+熟练(若有) |\n| 经验值 | ratio | 当前/下级所需，如：6500/14000|",
-      "initNode": "【初始化】\n1. 必须创建主角属性行，CHAR_ID=PC_MAIN\n2. 根据职业和等级按DND 5E规则计算所有数值\n3. 队友加入时同步添加属性行",
-      "updateNode": "【触发条件】\n- 受伤/治疗时更新HP\n- 升级时重算所有数值\n- 装备变化时重算AC\n- **主动经验结算（最高优先级）**：作为GM，你必须时刻监控剧情正文。一旦检测到战斗胜利、敌人倒下、谜题解开或任务达成，**必须在当前轮次**立即结算并增加经验值(XP)。不要等待玩家指令，不要依赖其他表格的状态。直接根据表现给予奖励（如：杂兵+50，精英+200，Boss+1000）。",
-      "insertNode": "【触发条件】新角色加入时，同步添加属性行",
-      "deleteNode": "【触发条件】\n- 主角行：禁止删除\n- 队友：离队时同步删除"
-    },
-    "content": [
-      [
-        null,
-        "CHAR_ID",
-        "等级",
-        "HP",
-        "AC",
-        "先攻加值",
-        "速度",
-        "属性值",
-        "豁免熟练",
-        "技能熟练",
-        "被动感知",
-        "经验值"
-      ]
-    ],
-    "updateConfig": {
-      "batchSize": 1,
-      "uiSentinel": -1,
-      "groupId": 1
-    },
-    "exportConfig": {
-      "enabled": true,
-      "splitByRow": false,
-      "entryName": "角色属性",
-      "entryType": "constant",
-      "keywords": "",
-      "preventRecursion": true,
-      "injectionTemplate": "",
-      "extraIndexEnabled": false,
-      "extraIndexEntryName": "📊 角色属性-索引",
-      "extraIndexColumns": [],
-      "extraIndexColumnModes": {},
-      "extraIndexInjectionTemplate": "",
-      "entryPlacement": {
-        "position": "at_depth_as_system",
-        "depth": 2,
-        "order": 10000
-      },
-      "extraIndexPlacement": {
-        "position": "at_depth_as_system",
-        "depth": 2,
-        "order": 10010
-      },
-      "fixedEntryPlacement": {
-        "position": "at_depth_as_system",
-        "depth": 2,
-        "order": 99990
-      },
-      "fixedIndexPlacement": {
-        "position": "at_depth_as_system",
-        "depth": 2,
-        "order": 99991
-      }
-    },
-    "orderNo": 15
-  },
-  "sheet_CHARACTER_Resources": {
-    "uid": "sheet_CHARACTER_Resources",
-    "name": "⚡ 角色资源",
-    "sourceData": {
-      "note": "【角色资源表】记录所有角色的可消耗资源。每个角色一行，通过CHAR_ID关联。\n\n| 列名 | 类型 | 格式示例 |\n|------|------|------|\n| CHAR_ID | fk | 外键，关联角色表(PC_MAIN或ALLY_XXX) |\n| 法术位 | string | {\"1级\":\"3/4\",\"2级\":\"2/3\",\"3级\":\"0/2\"} |\n| 职业资源 | string | 如战士：{\"动作如潮\":\"0/1\",\"再战\":\"1/1\"} |\n| 生命骰 | ratio | 短休可用，如：3/5 |\n| 特殊能力 | string | 种族/专长能力次数 |\n| 金币 | int | 当前持有金币数 |",
-      "initNode": "【初始化】\n1. 必须创建主角资源行，CHAR_ID=PC_MAIN\n2. 根据职业等级设置初始资源池\n3. 队友加入时同步添加资源行",
-      "updateNode": "【触发条件】\n- 使用法术/能力后扣除\n- 短休后恢复生命骰和部分职业资源\n- 长休后完全恢复\n- 金币变动时更新",
-      "insertNode": "【触发条件】新角色加入时，同步添加资源行",
-      "deleteNode": "【触发条件】\n- 主角行：禁止删除\n- 队友：离队时同步删除"
-    },
-    "content": [
-      [
-        null,
-        "CHAR_ID",
-        "法术位",
-        "职业资源",
-        "生命骰",
-        "特殊能力",
-        "金币"
-      ]
-    ],
-    "updateConfig": {
-      "batchSize": 1,
-      "uiSentinel": -1,
-      "groupId": 1
-    },
-    "exportConfig": {
-      "enabled": false,
-      "splitByRow": false,
-      "entryName": "角色资源",
-      "entryType": "constant",
-      "keywords": "",
-      "preventRecursion": true,
-      "injectionTemplate": "",
-      "extraIndexEnabled": false,
-      "extraIndexEntryName": "⚡ 角色资源-索引",
-      "extraIndexColumns": [],
-      "extraIndexColumnModes": {},
-      "extraIndexInjectionTemplate": "",
-      "entryPlacement": {
-        "position": "at_depth_as_system",
-        "depth": 2,
-        "order": 10000
-      },
-      "extraIndexPlacement": {
-        "position": "at_depth_as_system",
-        "depth": 2,
-        "order": 10010
-      },
-      "fixedEntryPlacement": {
-        "position": "at_depth_as_system",
-        "depth": 2,
-        "order": 99990
-      },
-      "fixedIndexPlacement": {
-        "position": "at_depth_as_system",
-        "depth": 2,
-        "order": 99991
-      }
-    },
-    "orderNo": 16
   },
   "sheet_SKILL_Library": {
     "uid": "sheet_SKILL_Library",
@@ -997,7 +685,7 @@
     },
     "content": [
       [
-        null,
+        "row_id",
         "SKILL_ID",
         "技能名称",
         "技能类型",
@@ -1064,7 +752,7 @@
     },
     "content": [
       [
-        null,
+        "row_id",
         "LINK_ID",
         "CHAR_ID",
         "SKILL_ID",
@@ -1127,7 +815,7 @@
     },
     "content": [
       [
-        null,
+        "row_id",
         "FEAT_ID",
         "专长名称",
         "类别",
@@ -1190,7 +878,7 @@
     },
     "content": [
       [
-        null,
+        "row_id",
         "LINK_ID",
         "CHAR_ID",
         "FEAT_ID",
@@ -1240,5 +928,323 @@
       }
     },
     "orderNo": 13
+  },
+  "sheet_CHARACTER_Registry": {
+    "uid": "sheet_CHARACTER_Registry",
+    "name": "👤 角色表",
+    "sourceData": {
+      "note": "【角色统一管理表】记录主角和队伍成员的基础信息。主角ID固定为PC_MAIN，队友ID格式为ALLY_XXX。\n\n| 列名 | 类型 | 说明 |\n|------|------|------|\n| CHAR_ID | pk | 主键，**主角固定为PC_MAIN**，队友为ALLY_XXX |\n| 成员类型 | enum | [主角/同伴/宠物/召唤物/魔宠/随从] |\n| 姓名 | string | 角色全名 |\n| 种族/性别/年龄 | string | 基础信息 |\n| 职业 | string | 职业及子职，如：圣武士(复仇誓言) Lv5 |\n| 外貌描述 | text | 详细的外貌特征描写 |\n| 性格特点 | text | 核心性格、理想、牵绊、缺陷 |\n| 背景故事 | text | 角色背景，主角最多500字，队友最多300字 |\n| 加入时间 | datetime | 主角为游戏开始时间，队友为加入队伍时间 |",
+      "initNode": "【初始化】\n1. 必须创建主角行，CHAR_ID=PC_MAIN，成员类型=主角\n2. 根据用户提供的角色信息填写主角数据\n3. 根据剧情设定填写初始队友信息",
+      "updateNode": "【触发条件】\n- 职业升级时更新职业列\n- 经历重大事件后追加背景故事（主角控制在500字内，队友300字内）\n- 外貌变化时更新描述",
+      "insertNode": "【严格限制】\n- 主角行：禁止插入，初始化时已创建\n- 队友：只有在NPC明确表达加入意愿，并且被玩家明确接受后，或者同意小队成员的入队邀请，才新增队友信息",
+      "deleteNode": "【触发条件】\n- 主角行：禁止删除\n- 队友：永久离队、死亡或背叛时删除"
+    },
+    "content": [
+      [
+        "row_id",
+        "CHAR_ID",
+        "成员类型",
+        "姓名",
+        "种族/性别/年龄",
+        "职业",
+        "外貌描述",
+        "性格特点",
+        "背景故事",
+        "加入时间"
+      ]
+    ],
+    "updateConfig": {
+      "batchSize": 1,
+      "uiSentinel": -1,
+      "groupId": 1
+    },
+    "exportConfig": {
+      "enabled": true,
+      "splitByRow": true,
+      "entryName": "角色信息",
+      "entryType": "constant",
+      "keywords": "",
+      "preventRecursion": true,
+      "injectionTemplate": "",
+      "extraIndexEnabled": false,
+      "extraIndexEntryName": "👤 角色表-索引",
+      "extraIndexColumns": [],
+      "extraIndexColumnModes": {},
+      "extraIndexInjectionTemplate": "",
+      "entryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10100
+      },
+      "extraIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10010
+      },
+      "fixedEntryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99990
+      },
+      "fixedIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99991
+      }
+    },
+    "orderNo": 14
+  },
+  "sheet_CHARACTER_Attributes": {
+    "uid": "sheet_CHARACTER_Attributes",
+    "name": "📊 角色属性",
+    "sourceData": {
+      "note": "【角色属性表】记录所有角色的完整战斗数据。每个角色一行，通过CHAR_ID关联。\n\n| 列名 | 类型 | 格式示例 |\n|------|------|------|\n| CHAR_ID | fk | 外键，关联角色表(PC_MAIN或ALLY_XXX) |\n| 等级 | int | 总等级数字 |\n| HP | ratio | 当前/最大，如：45/52 |\n| AC | int | 护甲等级数值 |\n| 先攻加值 | int | 敏捷调整值+其他加值 |\n| 速度 | string | 如：30尺(6格) |\n| 属性值 | string | {\"STR\":16,\"DEX\":14,\"CON\":14,\"INT\":10,\"WIS\":12,\"CHA\":8} |\n| 豁免熟练 | string | 如：[\"力量\",\"体质\"] |\n| 技能熟练 | string | 如：[\"运动\",\"威吓\",\"宗教\"] |\n| 被动感知 | int | 10+感知调整值+熟练(若有) |\n| 经验值 | ratio | 当前/下级所需，如：6500/14000|",
+      "initNode": "【初始化】\n1. 必须创建主角属性行，CHAR_ID=PC_MAIN\n2. 根据职业和等级按DND 5E规则计算所有数值\n3. 队友加入时同步添加属性行",
+      "updateNode": "【触发条件】\n- 受伤/治疗时更新HP\n- 装备变化时重算AC\n- **经验增长约束**：作为GM，你必须时刻监控剧情正文，一旦检测到正文出现角色完成了委托/战斗/制作，增加了对应经验值（EXP/XP）数值，**必须在当前轮次**立即结算并增加经验值(EXP/XP)，但正文未提及经验值增长，禁止自主增加经验值，一切以正文为准\n- **升级约束**:  若当前正文获取的经验值到达当前等级的上限（或\"下级所需\"），【绝对禁止】提升角色的等级，【绝对禁止】超过当前经验上限，而是让当前值等于上限值，由外部脚本处理升级逻辑。",
+      "insertNode": "【触发条件】新角色加入时，同步添加属性行",
+      "deleteNode": "【触发条件】\n- 主角行：禁止删除\n- 队友：离队时同步删除"
+    },
+    "content": [
+      [
+        "row_id",
+        "CHAR_ID",
+        "等级",
+        "HP",
+        "AC",
+        "先攻加值",
+        "速度",
+        "属性值",
+        "豁免熟练",
+        "技能熟练",
+        "被动感知",
+        "经验值"
+      ]
+    ],
+    "updateConfig": {
+      "batchSize": 1,
+      "uiSentinel": -1,
+      "groupId": 1
+    },
+    "exportConfig": {
+      "enabled": true,
+      "splitByRow": false,
+      "entryName": "角色属性",
+      "entryType": "constant",
+      "keywords": "",
+      "preventRecursion": true,
+      "injectionTemplate": "",
+      "extraIndexEnabled": false,
+      "extraIndexEntryName": "📊 角色属性-索引",
+      "extraIndexColumns": [],
+      "extraIndexColumnModes": {},
+      "extraIndexInjectionTemplate": "",
+      "entryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10200
+      },
+      "extraIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10010
+      },
+      "fixedEntryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99990
+      },
+      "fixedIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99991
+      }
+    },
+    "orderNo": 15
+  },
+  "sheet_CHARACTER_Resources": {
+    "uid": "sheet_CHARACTER_Resources",
+    "name": "⚡ 角色资源",
+    "sourceData": {
+      "note": "【角色资源表】记录所有角色的可消耗资源。每个角色一行，通过CHAR_ID关联。\n\n| 列名 | 类型 | 格式示例 |\n|------|------|------|\n| CHAR_ID | fk | 外键，关联角色表(PC_MAIN或ALLY_XXX) |\n| 法术位 | string | {\"1级\":\"3/4\",\"2级\":\"2/3\",\"3级\":\"0/2\"} |\n| 职业资源 | string | 如战士：{\"动作如潮\":\"0/1\",\"再战\":\"1/1\"} |\n| 生命骰 | ratio | 短休可用，如：3/5 |\n| 特殊能力 | string | 种族/专长能力次数 |\n| 金币 | int | 当前持有金币数 |",
+      "initNode": "【初始化】\n1. 必须创建主角资源行，CHAR_ID=PC_MAIN\n2. 根据职业等级设置初始资源池\n3. 队友加入时同步添加资源行",
+      "updateNode": "【触发条件】\n- 使用法术/能力后扣除\n- 短休后恢复生命骰和部分职业资源\n- 长休后完全恢复\n- 金币变动时更新",
+      "insertNode": "【触发条件】新角色加入时，同步添加资源行",
+      "deleteNode": "【触发条件】\n- 主角行：禁止删除\n- 队友：离队时同步删除"
+    },
+    "content": [
+      [
+        "row_id",
+        "CHAR_ID",
+        "法术位",
+        "职业资源",
+        "生命骰",
+        "特殊能力",
+        "金币"
+      ]
+    ],
+    "updateConfig": {
+      "batchSize": 1,
+      "uiSentinel": -1,
+      "groupId": 1
+    },
+    "exportConfig": {
+      "enabled": true,
+      "splitByRow": false,
+      "entryName": "角色资源",
+      "entryType": "constant",
+      "keywords": "",
+      "preventRecursion": true,
+      "injectionTemplate": "",
+      "extraIndexEnabled": false,
+      "extraIndexEntryName": "⚡ 角色资源-索引",
+      "extraIndexColumns": [],
+      "extraIndexColumnModes": {},
+      "extraIndexInjectionTemplate": "",
+      "entryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10300
+      },
+      "extraIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10010
+      },
+      "fixedEntryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99990
+      },
+      "fixedIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99991
+      }
+    },
+    "orderNo": 16
+  },
+  "sheet_EXPLORATION_Map_Data": {
+    "uid": "sheet_EXPLORATION_Map_Data",
+    "name": "🗺️ 探索地图数据",
+    "sourceData": {
+      "note": "【探索地图结构表】存储每个场景的地图结构数据（JSON格式）。\n你是一个拥有建筑学学位的资深DND地牢架构师。请根据 LocationName（作为主题）及所属 IP 风格，设计一个紧凑、工整且富有环境叙事的地牢平面图。\n\n关键设计原则：\n1. **网格吸附系统**：为了保证工整，所有房间的坐标(x,y)和尺寸(width,height) **必须是 25 或 50 的整数倍**。\n2. **物理拓扑**：房间之间必须物理紧邻（间隙为0），形成闭环。严禁出现细长的无效缝隙。\n3. **走廊实体化**：走廊(corridor)必须是拥有真实坐标(x,y,w,h)的长条形房间，绝不能是抽象连线。\n4. **门与通道**：门必须精确计算坐标，位于两个房间的**共享边**上。\n5. **IP沉浸式布局**：房间命名和形状应反映当前地点的历史背景（如：废弃实验室应有破碎的窗户和绿色毒雾颜色）。\n\n请生成一个至少包含 **8-12个区域**（房间+走廊）的复杂结构，确保有一个明确的入口和一个位于深处的Boss区域。\n| 列名 | 类型 | 说明 |\n|------|------|------|\n| LocationName | pk | 场景名称（对应全局状态表的“当前场景”） |\n| MapStructureJSON | text | 只有结构数据的JSON字符串（严格执行网格对齐） |\n| LastUpdated | datetime | 最后生成时间 |\n| 当前显示地图 | enum | [是/否]，强制显示该地图，忽略全局场景 |\n\n【JSON结构定义】MapStructureJSON 必须符合以下 Schema：\n{\n  \"mapName\": \"地图名称 (e.g. 影牙城堡-下层)\",\n  \"mapSize\": { \"width\": 1000, \"height\": 800 },\n  \"rooms\": [\n    {\n      \"id\": \"room_1\",\n      \"name\": \"入口大厅/仪式大厅/军械库\",\n      \"type\": \"entrance/corridor/room/hall/secret_room/boss_arena/shop\",\n      \"shape\": \"rectangular/L-shaped/cross/circular/cave_blob (人工建筑多用几何体，自然洞穴用 irregular)\",\n      \"x\": 100, \"y\": 100, \"width\": 200, \"height\": 150,\n      \"description\": \"详细的环境描写（光影、气味、声音）...\",\n      \"color\": \"#hex (符合环境氛围的色调，如深红、幽蓝)\"\n    }\n  ],\n  \"doors\": [\n    {\n      \"x\": 300, \"y\": 175,\n      \"type\": \"open/door/secret_door/barred/magic_barrier\",\n      \"orientation\": \"horizontal/vertical\",\n      \"connects\": [\"room_1\", \"room_2\"]\n    }\n  ],\n  \"features\": [\n    {\n      \"x\": 150, \"y\": 150,\n      \"type\": \"column/statue/chest/trap/fountain/table/altar/terminal\"\n    }\n  ]\n}",
+      "initNode": "【初始化】如果游戏开始时主角已处于某个地牢/探索区域，应用下方【insertNode】的逻辑生成该区域的初始地图。",
+      "updateNode": "【触发条件】通常不更新结构。除非剧情导致地形发生巨大改变（如塌方、魔法重塑、发现新房间），此时重新执行生成逻辑。",
+      "insertNode": "【触发条件】当主角进入一个新的探索区域时触发。作为资深DND地牢架构师及Lore专家，请根据 LocationName（作为主题）设计一个紧凑、真实且富有叙事感的地牢平面图结构。\n\n## 核心思维流（CoT）：\n1. **IP检索与风格分析**：首先分析 LocationName。如果它属于著名IP（如生化危机、黑暗之魂、DND模组、魔兽世界等）或特定历史风格，**立即调用内部知识库**检索其典型布局、房间命名习惯及环境氛围。\n2. **功能区划**：不要随机堆砌。按照“入口缓冲区 -> 枢纽区 -> 功能分支 -> 核心/Boss区”的建筑逻辑规划。\n3. **几何网格化**：想象一个虚拟网格。所有房间的坐标(x,y)和尺寸(w,h)必须是整数且尽量对齐，确保地图看起来工整、专业。\n\n## 关键设计原则：\n1. **无缝模块化**：房间与房间之间必须物理“贴合”（坐标紧邻），形成一个闭环的建筑群，杜绝孤岛。\n2. **走廊实体化**：Corridor（走廊）必须是具有真实坐标(x,y,w,h)的长条形房间实体，绝不能是抽象的连线。\n3. **复杂的连通性**：避免单一直线流程。设计环路、捷径和分支，使得地图具有探索深度。\n4. **IP化命名**：房间名称应贴合设定（例如：若是生化危机主题，使用“S.T.A.R.S.办公室”而非“房间A”；若是魔幻主题，使用“奥术凝视大厅”而非“大房间”）。\n5. **不规则中的秩序**：虽然布局可以不对称，但边缘应整齐，避免出现无意义的细长缝隙。\n\n## 生成要求：\n- **数量强制**：必须包含 **8-12 个** 独立的探索区域（房间+走廊）。\n- **结构完整**：明确标记入口（Entrance）和深处的Boss区域/关键剧情点。\n- **数据格式**：\n  - 严格输出符合 Note 中定义的 JSON Schema。\n  - 确保坐标数值精确，互不重叠但紧密相连。\n  - 将完整的 JSON 字符串输出到 `MapStructureJSON` 字段。\n  - 获取当前时间并填入 `LastUpdated`。\n\n现在，开始构建 [{{LocationName}}] 的地图数据：",
+      "deleteNode": "【触发条件】当主角彻底离开该区域且短期内不会返回时，可删除以节省空间。"
+    },
+    "content": [
+      [
+        "row_id",
+        "LocationName",
+        "MapStructureJSON",
+        "LastUpdated",
+        "当前显示地图"
+      ]
+    ],
+    "updateConfig": {
+      "batchSize": 3,
+      "uiSentinel": -1,
+      "groupId": 3,
+      "updateFrequency": 0,
+      "skipFloors": 200
+    },
+    "exportConfig": {
+      "enabled": false,
+      "splitByRow": false,
+      "entryName": "探索地图数据",
+      "entryType": "constant",
+      "keywords": "",
+      "preventRecursion": true,
+      "injectionTemplate": "",
+      "extraIndexEnabled": false,
+      "extraIndexEntryName": "🗺️ 探索地图数据-索引",
+      "extraIndexColumns": [],
+      "extraIndexColumnModes": {},
+      "extraIndexInjectionTemplate": "",
+      "entryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10000
+      },
+      "extraIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10010
+      },
+      "fixedEntryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99990
+      },
+      "fixedIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99991
+      },
+      "injectIntoWorldbook": false
+    },
+    "orderNo": 17
+  },
+  "sheet_COMBAT_Map_Visuals": {
+    "uid": "sheet_COMBAT_Map_Visuals",
+    "name": "🖌️ 战斗地图绘制",
+    "sourceData": {
+      "note": "【战斗地图视觉表】存储战斗场景的视觉结构数据，用于生成底图。与COMBAT_BattleMap配合，后者存逻辑(墙/怪)，此表存视觉(地面/装饰)。\n\n| 列名 | 类型 | 说明 |\n|------|------|------|\n| SceneName | pk | 场景名称，通常对应全局状态的“当前场景” |\n| VisualJSON | text | 视觉结构数据(JSON)，包含地面材质、装饰物等 |\n| GridSize | string | 网格尺寸，格式: 20x20 |\n| LastUpdated | datetime | 最后更新时间 |\n\n【VisualJSON结构定义】\n{\n  \"mapName\": \"场景名\",\n  \"dimensions\": { \"width\": 20, \"height\": 20 },\n  \"ground\": \"grass/stone/wood_plank/water/lava/snow...\",\n  \"terrain_objects\": [\n    {\n      \"type\": \"tree/rock/wall/pillar/water_pool/furniture/rubble...\",\n      \"x\": 1, \"y\": 1, \"w\": 1, \"h\": 1,\n      \"rotation\": 0,\n      \"description\": \"描述\",\n      \"tactical\": \"cover/block/difficult\"\n    }\n  ]\n}",
+      "initNode": "【初始化】无需预填。",
+      "updateNode": "【触发条件】当战斗场景的环境发生重大视觉变化时更新。",
+      "insertNode": "【触发条件】当进入一场战斗，且该场景尚未在此表中存在记录时，根据正文剧情的环境描述生成视觉数据。\n操作指南：\n1. 提取剧情中的环境要素（如：酒馆地板是木质的，角落有翻倒的桌子）。\n2. 生成符合JSON格式的VisualJSON。\n3. GridSize 默认为 20x20，除非剧情暗示了极小或极大的空间。\n4. 这是生成地图底图的关键依据。",
+      "deleteNode": "【触发条件】场景不再需要或地图数据过旧时删除。"
+    },
+    "content": [
+      [
+        "row_id",
+        "SceneName",
+        "VisualJSON",
+        "GridSize",
+        "LastUpdated"
+      ]
+    ],
+    "updateConfig": {
+      "batchSize": 3,
+      "uiSentinel": -1,
+      "groupId": 3
+    },
+    "exportConfig": {
+      "enabled": false,
+      "splitByRow": false,
+      "entryName": "战斗绘制",
+      "entryType": "constant",
+      "keywords": "",
+      "preventRecursion": true,
+      "injectionTemplate": "",
+      "extraIndexEnabled": false,
+      "extraIndexEntryName": "🖌️ 战斗地图绘制-索引",
+      "extraIndexColumns": [],
+      "extraIndexColumnModes": {},
+      "extraIndexInjectionTemplate": "",
+      "entryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10000
+      },
+      "extraIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10010
+      },
+      "fixedEntryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99990
+      },
+      "fixedIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99991
+      },
+      "injectIntoWorldbook": false
+    },
+    "orderNo": 18
   }
 }

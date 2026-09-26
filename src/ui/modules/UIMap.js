@@ -73,17 +73,21 @@ export default {
             // 忽略右键
             if (e.button === 2) return;
             
-            // [修复] 检查是否应该禁用拖拽 (瞄准模式或点击 Token)
+            const isMiddleButton = e.button === 1; // 识别中键/滚轮按下
+            const isLeftButton = e.button === 0;   // 识别左键按下
+
+            // 检查点击目标
             const clickTarget = document.elementFromPoint(e.clientX, e.clientY);
             const $clickTarget = $(clickTarget);
             const isOnToken = $clickTarget.closest('.dnd-minimap-token').length > 0;
             const isTargeting = self._targetingMode && self._targetingMode.active;
             
-            if (isOnToken || isTargeting) {
-                // 禁用拖拽，让原生 click 事件正常触发
+            // 逻辑：只有当【左键】点击在【Token上】或【处于瞄准模式】时，才禁用拖拽以执行点击/交互。
+            // 如果是中键，或者是非交互区的左键，均会跳过此判断，继续执行下方的平移代码。
+            if (isLeftButton && (isOnToken || isTargeting)) {
                 dragDisabled = true;
-                console.log('[MapZoom] Drag disabled - isOnToken:', isOnToken, 'isTargeting:', isTargeting);
-                return; // 不调用 preventDefault，让 click 事件正常传播
+                console.log('[MapZoom] 左键交互优先，禁用平移');
+                return; // 不调用 preventDefault，让原生 click/targeting 逻辑触发
             }
             
             dragDisabled = false;
@@ -646,8 +650,11 @@ export default {
         $innerMap.find('.dnd-map-overlay').remove();
         
         const activeChar = this.getControlledCharacter();
+        const activeId = activeChar ? (activeChar['CHAR_ID'] || activeChar['PC_ID'] || activeChar['姓名']) : 'default';
         let sourcePos = { x: 0, y: 0 };
         let sourceFound = false;
+
+        
         let realPos = null;
 
         if (encounters && activeChar) {
@@ -658,15 +665,17 @@ export default {
             if (activeUnit) {
                 const token = mapData.find(m => m['类型'] === 'Token' && m['单位名称'] === activeUnit['单位名称']);
                 if (token) {
+
+
                     const p = DataManager.parseValue(token['坐标'], 'coord');
                     if (p) realPos = { x: p.x || 1, y: p.y || 1 };
                 }
             }
         }
 
-        if (this._virtualPos) {
-            sourcePos = { ...this._virtualPos };
-            sourceFound = true;
+        if (activeId !== 'default' && this._virtualPosPool && this._virtualPosPool[activeId]) {
+            sourcePos = { ...this._virtualPosPool[activeId] };
+            sourceFound = true; // [修复] 必须标记已找到源头位置，否则下方不会渲染测距圈
             // 渲染虚拟位置 (Ghost)
             const vPxX = (sourcePos.x - 1) * cellSize;
             const vPxY = (sourcePos.y - 1) * cellSize;
@@ -784,16 +793,18 @@ export default {
         const encounters = DataManager.getTable('COMBAT_Encounter');
         const mapData = DataManager.getTable('COMBAT_BattleMap');
         const activeChar = this.getControlledCharacter();
-        
+        const activeId = activeChar ? (activeChar['CHAR_ID'] || activeChar['PC_ID'] || activeChar['姓名']) : 'default';
+
         // --- A. 瞄准模式 ---
         if (state.active) {
             // 1. 计算距离
             let dist = 999;
             let sourcePos = { x: 0, y: 0 };
             
-            // 获取源头位置 (优先使用虚拟位置，即移动后的位置)
-            if (this._virtualPos) {
-                sourcePos = { ...this._virtualPos };
+
+            // 获取源头位置 (优先使用当前角色的虚拟位置池)
+            if (activeId && this._virtualPosPool && this._virtualPosPool[activeId]) {
+                sourcePos = { ...this._virtualPosPool[activeId] };
             } else if (encounters && activeChar) {
                 // [修复] 尝试模糊匹配名称
                 let activeUnit = encounters.find(u => u['单位名称'] === activeChar['姓名']);
