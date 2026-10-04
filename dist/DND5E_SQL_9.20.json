@@ -87,12 +87,12 @@
     "uid": "sheet_npczhucebiao",
     "name": "👥 NPC注册表",
     "sourceData": {
-      "note": "-- 【NPC统一管理表】所有重要NPC/同伴/敌对头目唯一数据源，通过 npc_id 关联其他子表。\nCREATE TABLE sheet_npczhucebiao (\n    row_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 行号: 自增物理主键\n    npc_id TEXT NOT NULL UNIQUE, -- NPC编号: 业务唯一键,格式'NPC_XXX'(如 'NPC_001')\n    xing_ming TEXT NOT NULL, -- 姓名: NPC全名,死亡时末尾必须追加†符号(如 '银霜', 死亡后变为 '银霜†')\n    zhong_zu_xing_bie_nian_ling TEXT NOT NULL, -- 基础信息: 种族/性别/年龄(如 '狼裔-兽亲/雄/19'、'佩洛-犬裔/雌/35'、'菲林-狮裔/雄/22')\n    zhi_ye_shen_fen TEXT NOT NULL, -- 职业身份: 社会身份或职业(如 '守林人'、'法师'、'教师')\n    wai_mao_miao_shu TEXT, -- 外貌描述: 客观特征(如 '银白狼耳与毛茸长尾,身披轻便皮甲,眼神警惕')\n    deng_ji TEXT NOT NULL, -- 等级: DND等级\n    hp TEXT NOT NULL, -- 生命值: DND生命值,格式'当前HP/最大HP'(如 '45/52')\n    ac INTEGER NOT NULL, -- 护甲等级: DND5E的AC护甲值,纯整数(如 14)\n    zhu_yao_ji_neng TEXT, -- 主要技能: 特技/法术/招式,逗号分隔(如 '二次攻击,野性感知,猎人印记')\n    sui_shen_wu_pin TEXT, -- 随身物品: 随身装备与道具,逗号分隔(如 '精制猎弓,短剑x2,治疗药水x1')\n    dang_qian_zhuang_tai TEXT NOT NULL CHECK (dang_qian_zhuang_tai IN ('在场','离场','死亡','失踪')), -- 当前状态\n    suo_zai_wei_zhi TEXT NOT NULL, -- 所在位置: NPC当前所处场景名称(如 '诺斯加德-霜叶之森-隐蔽雪穴')\n    guan_jian_jing_li TEXT -- 关键经历: 影响剧情与关系的重要历史事件记录\n);",
+      "note": "-- 【NPC统一管理表】所有重要NPC/同伴/敌对头目唯一数据源，通过 npc_id 关联其他子表。\nCREATE TABLE sheet_npczhucebiao (\n    row_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 行号: 自增物理主键\n    npc_id TEXT NOT NULL UNIQUE, -- NPC编号: 业务唯一键,格式'NPC_XXX'(如 'NPC_001')\n    xing_ming TEXT NOT NULL, -- 姓名: NPC全名,死亡时末尾必须追加†符号(如 '银霜', 死亡后变为 '银霜†')\n    zhong_zu_xing_bie_nian_ling TEXT NOT NULL, -- 基础信息: 种族/性别/年龄(如 '狼裔-兽亲/雄/19'、'佩洛-犬裔/雌/35'、'菲林-狮裔/雄/22')\n    zhi_ye_shen_fen TEXT NOT NULL, -- 职业身份: 社会身份或职业(如 '守林人'、'法师'、'教师')\n    wai_mao_miao_shu TEXT, -- 外貌描述: 客观特征(如 '银白狼耳与毛茸长尾,身披轻便皮甲,眼神警惕')\n    deng_ji TEXT NOT NULL, -- 等级: DND等级\n    hp TEXT NOT NULL, -- 生命值: DND生命值,格式'当前HP/最大HP'(如 '45/52')\n    ac INTEGER NOT NULL, -- 护甲等级: DND5E的AC护甲值,纯整数(如 14)\n    zhu_yao_ji_neng TEXT, -- 主要技能: 特技/法术/招式,逗号分隔(如 '二次攻击,野性感知,猎人印记')\n    sui_shen_wu_pin TEXT, -- 随身物品: 随身装备与道具,逗号分隔(如 '精制猎弓,短剑x2,治疗药水x1')\n    dang_qian_zhuang_tai TEXT NOT NULL CHECK (dang_qian_zhuang_tai IN ('在场','离场','死亡','失踪')), -- 当前状态\n    suo_zai_wei_zhi TEXT NOT NULL, -- 所在位置: NPC当前所处场景名称(如 '诺斯加德-霜叶之森-隐蔽雪穴')\n    yu_zhu_jiao_guan_xi TEXT, -- 与主角关系: 关系描述（如 '盟友'/'敌人'/'雇主'）\n    guan_jian_jing_li TEXT -- 关键经历: 影响剧情与关系的重要历史事件记录\n);",
       "initNode": "/* 【初始化触发规则】开局单次执行。为开局第一幕已登场的重要NPC/初始同伴创建初始档案；提取实际剧情信息填入动态占位符，严禁漏填初始战斗数值 */\nINSERT INTO sheet_npczhucebiao (\n    npc_id, xing_ming, zhong_zu_xing_bie_nian_ling, zhi_ye_shen_fen,\n    wai_mao_miao_shu, deng_ji, hp, ac,\n    zhu_yao_ji_neng, sui_shen_wu_pin, dang_qian_zhuang_tai,\n    suo_zai_wei_zhi,\n    guan_jian_jing_li\n) VALUES (\n    'NPC_001',\n    '{开局登场NPC全名}',\n    '{种族/性别/年龄，如: 黎博利-鸮裔/雌/22}',\n    '{职业/身份，如: 游侠/佣兵}',\n    '{外貌体貌特征与穿戴描述}',\n    '{等级，如: 3}',\n    '{初始HP格式: 当前HP/最大HP，如: 28/28}',\n    13, -- {初始AC整数值}\n    '{常用技能/能力/招式，逗号分隔}',\n    '{随身携带物品/武器/药水，逗号分隔}',\n    '在场',\n    '{当前所在场景名称}',\n    '{初次登场或产生交集的关键经历}');",
       "updateNode": "/* 【更新触发规则】满足以下任意条件时按 npc_id 精确更新：\n 1. 状态/位置变动：更新 dang_qian_zhuang_tai 与 suo_zai_wei_zhi。\n 2. 战斗结算：受伤/治疗更新 hp；获取/消耗道具更新 sui_shen_wu_pin。\n 3. 死亡【铁律】：HP降至0或剧情死亡时，dang_qian_zhuang_tai 改为 '死亡'，xing_ming 尾部强制追加 '†'（如 '艾莲' -> '艾莲†'）。 */\nUPDATE sheet_npczhucebiao \nSET \n    xing_ming = '{死亡时追加†符号，未死则保持原名}',\n    zhi_ye_shen_fen = '{身份变化时更新，否则保持原值}',\n    wai_mao_miao_shu = '{外貌或受创伤残变化时更新}',\n    deng_ji = '{等级提升时更新}',\n    hp = '{更新当前HP/最大HP，如: 18/52}',\n    ac = {AC数值},\n    zhu_yao_ji_neng = '{技能列表更新}',\n    sui_shen_wu_pin = '{随身物品清单更新}',\n    dang_qian_zhuang_tai = '{在场 | 离场 | 死亡 | 失踪}',\n    suo_zai_wei_zhi = '{最新场景位置}',\n    guan_jian_jing_li = '{追加最新关键经历}'\nWHERE npc_id = '{目标NPC编号，如 NPC_001}';",
       "insertNode": "/* 【新增触发规则】当剧情中有新的重要NPC/关键角色登场时执行。npc_id 严格按 'NPC_002', 'NPC_003' 递增分配 */\nINSERT INTO sheet_npczhucebiao (\n    npc_id, xing_ming, zhong_zu_xing_bie_nian_ling, zhi_ye_shen_fen,\n    wai_mao_miao_shu, deng_ji, hp, ac,\n    zhu_yao_ji_neng, sui_shen_wu_pin, dang_qian_zhuang_tai,\n    suo_zai_wei_zhi,\n    guan_jian_jing_li\n) VALUES (\n    '{新NPC编号: 递增如 NPC_002}',\n    '{新NPC全名}',\n    '{种族/性别/年龄}',\n    '{职业或社会身份}',\n    '{外貌及装备细节描写}',\n    '{等级}',\n    '{当前HP/最大HP}',\n    12, -- {AC护甲值}\n    '{核心技能或法术}',\n    '{随身装备与道具清单}',\n    '在场',\n    '{登场所在的场景名称}',\n    '{初次登场的关键事件/印象}'\n);",
       "deleteNode": "/* 严格禁止物理删除：NPC数据终身保留以供历史回溯。NPC死亡、离场或失踪一律通过 updateNode 修改 dang_qian_zhuang_tai 并在死亡时追加 † 符号进行逻辑归档 */",
-      "ddl": "CREATE TABLE sheet_npczhucebiao (\n  row_id INTEGER PRIMARY KEY,\n  npc_id TEXT,\n  xing_ming TEXT, -- 姓名\n  zhong_zu_xing_bie_nian_ling TEXT, -- 种族/性别/年龄\n  zhi_ye_shen_fen TEXT, -- 职业/身份\n  wai_mao_miao_shu TEXT, -- 外貌描述\n  deng_ji TEXT, -- 等级\n  hp TEXT, -- HP\n  ac TEXT, -- AC\n  zhu_yao_ji_neng TEXT, -- 主要技能\n  sui_shen_wu_pin TEXT, -- 随身物品\n  dang_qian_zhuang_tai TEXT, -- 当前状态\n  suo_zai_wei_zhi TEXT, -- 所在位置\n  guan_jian_jing_li TEXT -- 关键经历\n);"
+      "ddl": "CREATE TABLE sheet_npczhucebiao (\n  row_id INTEGER PRIMARY KEY,\n  npc_id TEXT,\n  xing_ming TEXT, -- 姓名\n  zhong_zu_xing_bie_nian_ling TEXT, -- 种族/性别/年龄\n  zhi_ye_shen_fen TEXT, -- 职业/身份\n  wai_mao_miao_shu TEXT, -- 外貌描述\n  deng_ji TEXT, -- 等级\n  hp TEXT, -- HP\n  ac TEXT, -- AC\n  zhu_yao_ji_neng TEXT, -- 主要技能\n  sui_shen_wu_pin TEXT, -- 随身物品\n  dang_qian_zhuang_tai TEXT, -- 当前状态\n  suo_zai_wei_zhi TEXT, -- 所在位置\n  yu_zhu_jiao_guan_xi TEXT, -- 与主角关系\n  guan_jian_jing_li TEXT -- 关键经历\n);"
     },
     "content": [
       [
@@ -109,6 +109,7 @@
         "随身物品",
         "当前状态",
         "所在位置",
+        "与主角关系",
         "关键经历"
       ]
     ],
@@ -159,12 +160,12 @@
     "uid": "sheet_beibao",
     "name": "🎒 背包",
     "sourceData": {
-      "note": "-- 【物品管理表】记录队伍全员持有的装备、消耗品与杂物，通过 suo_shu_ren 标识归属。\nCREATE TABLE sheet_beibao (\n    row_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 行号: 自增物理主键\n    item_id TEXT NOT NULL UNIQUE, -- 物品编号: 格式'ITEM_XXX'(如 'ITEM_01')\n    wu_pin_ming_cheng TEXT NOT NULL, -- 物品名称: 物品全名(如 '精制钢质长剑'、'微光治疗药水')\n    lei_bie TEXT NOT NULL CHECK (lei_bie IN ('武器','护甲','消耗品','工具','杂物','魔法物品','任务专属物品')), -- 类别\n    shu_liang INTEGER NOT NULL DEFAULT 1, -- 数量: 持有数量,纯整数(如 1, 5)\n    yi_zhuang_bei TEXT NOT NULL DEFAULT '否' CHECK (yi_zhuang_bei IN ('是','否')), -- 已装备: 是否佩戴生效\n    suo_shu_ren TEXT NOT NULL DEFAULT '队伍公共', -- 所属人: 持有者角色名或'队伍公共'(如 '利姆鲁'/'银霜'/'队伍公共')\n    te_xing TEXT, -- 特性: 伤害骰/护甲加值/词条/机制效果(如 '1d8挥砍,轻型' / '+1AC' / '饮用恢复2d4+2 HP')\n    xi_you_du TEXT NOT NULL DEFAULT '普通' CHECK (xi_you_du IN ('普通','优良','稀有','史诗','传说','神话')), -- 稀有度\n    miao_shu TEXT, -- 描述: 仅限外观与背景叙事,严禁存放数值规则(如 '剑柄刻有微光纹路的轻钢长剑,触感冰凉')\n    jia_zhi TEXT -- 价值: 市场参考价值(如 '15 G')\n);",
+      "note": "-- 【物品管理表】记录队伍全员持有的装备、消耗品与杂物，通过 suo_shu_ren 标识归属。\nCREATE TABLE sheet_beibao (\n    row_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 行号: 自增物理主键\n    item_id TEXT NOT NULL UNIQUE, -- 物品编号: 格式'ITEM_XXX'(如 'ITEM_01')\n    wu_pin_ming_cheng TEXT NOT NULL, -- 物品名称: 物品全名(如 '精制钢质长剑'、'微光治疗药水')\n    lei_bie TEXT NOT NULL CHECK (lei_bie IN ('武器','护甲','消耗品','工具','杂物','魔法物品','任务专属物品')), -- 类别\n    shu_liang INTEGER NOT NULL DEFAULT 1, -- 数量: 持有数量,纯整数(如 1, 5)\n    yi_zhuang_bei TEXT NOT NULL DEFAULT '否' CHECK (yi_zhuang_bei IN ('是','否')), -- 已装备: 是否佩戴生效\n    suo_shu_ren TEXT NOT NULL DEFAULT '队伍公共', -- 所属人: 持有者角色名或'队伍公共'(如 '利姆鲁'/'银霜'/'队伍公共')\n    shang_hai TEXT, -- 伤害: 武器伤害骰（如 '1d8+3'）\n    te_xing TEXT, -- 特性: 伤害骰/护甲加值/词条/机制效果(如 '1d8挥砍,轻型' / '+1AC' / '饮用恢复2d4+2 HP')\n    xi_you_du TEXT NOT NULL DEFAULT '普通' CHECK (xi_you_du IN ('普通','优良','稀有','史诗','传说','神话')), -- 稀有度\n    miao_shu TEXT, -- 描述: 仅限外观与背景叙事,严禁存放数值规则(如 '剑柄刻有微光纹路的轻钢长剑,触感冰凉')\n    zhong_liang TEXT, -- 重量: 磅数，用于负重计算\n    jia_zhi TEXT -- 价值: 市场参考价值(如 '15 G')\n);",
       "initNode": "/* 【初始化触发规则】开局单次执行。根据主角及初始同伴的初始职业与背景设定，分别插入初始携带的装备与道具 */\nINSERT INTO sheet_beibao (\n    item_id, wu_pin_ming_cheng, lei_bie, shu_liang,\n    yi_zhuang_bei, suo_shu_ren, te_xing, xi_you_du, miao_shu, jia_zhi\n) VALUES \n(\n    'ITEM_01',\n    '{初始主武器/核心装备名}',\n    '武器',\n    1,\n    '是',\n    '{主角名}',\n    '{伤害骰与词条，如: 1d8+2 挥砍, 灵巧}',\n    '普通',\n    '{装备外观与工艺叙事描写}',\n    '15 G'\n),\n(\n    'ITEM_02',\n    '{初始防具/随身道具名}',\n    '消耗品',\n    2,\n    '否',\n    '{主角名或同伴名}',\n    '{机制效果，如: 动作消耗, 恢复2d4+2点HP}',\n    '普通',\n    '{药水瓶或道具外观叙事描写}',\n    '50 G'\n);",
       "updateNode": "/* 【更新触发规则】满足以下任意条件时按 item_id 更新：\n 1. 数量增减：获取已有物品时 shu_liang 增加；消耗或丢弃部分时 shu_liang 减少。\n 2. 装备穿脱：穿戴/装备置为 '是'，卸下置为 '否'。\n 3. 物品转交：变更 suo_shu_ren。\n 4. 【数据清洗铁律】：若发现 miao_shu 中混入了数值、伤害骰或规则判定，必须将其剥离并迁移至 te_xing 字段，保持 miao_shu 为纯叙事描述。 */\nUPDATE sheet_beibao \nSET \n    shu_liang = {更新后的最新数量},\n    yi_zhuang_bei = '{是 | 否}',\n    suo_shu_ren = '{持有者角色名或 队伍公共}',\n    te_xing = '{规范后的DND数值机制与特性效果}',\n    xi_you_du = '{稀有度变更时更新，否则保持原值}',\n    miao_shu = '{纯外观背景叙事描写}',\n    jia_zhi = '{最新市场估值}'\nWHERE item_id = '{目标物品编号，如 ITEM_01}';",
       "insertNode": "/* 【新增触发规则】当搜刮、购买、任务奖励或拾取到背包中【完全不存在的新物品】时执行。item_id 按 'ITEM_03', 'ITEM_04' 递增分配 */\nINSERT INTO sheet_beibao (\n    item_id, wu_pin_ming_cheng, lei_bie, shu_liang,\n    yi_zhuang_bei, suo_shu_ren, te_xing, xi_you_du, miao_shu, jia_zhi\n) VALUES (\n    '{递增编号: 如 ITEM_03}',\n    '{新物品名称}',\n    '{武器 | 护甲 | 消耗品 | 工具 | 杂物 | 魔法物品 | 任务专属物品}',\n    {获得数量: 纯整数},\n    '否',\n    '{获得者角色名或 队伍公共}',\n    '{数值/伤害骰/检定加值/具体机制效果}',\n    '{普通 | 优良 | 稀有 | 史诗 | 传说 | 神话}',\n    '{纯叙事外观与背景，严禁存放机制规则}',\n    '{市场价格: 如 20 G}'\n);",
       "deleteNode": "/* 【删除触发规则】当物品数量归零（全部消耗/赠送/卖出）、被完全摧毁或永久丢失时执行物理删除 */\nDELETE FROM sheet_beibao \nWHERE item_id = '{归零或损毁物品编号，如 ITEM_02}' \n   OR shu_liang <= 0;",
-      "ddl": "CREATE TABLE sheet_beibao (\n  row_id INTEGER PRIMARY KEY,\n  item_id TEXT,\n  wu_pin_ming_cheng TEXT, -- 物品名称\n  lei_bie TEXT, -- 类别\n  shu_liang TEXT, -- 数量\n  yi_zhuang_bei TEXT, -- 已装备\n  suo_shu_ren TEXT, -- 所属人\n  te_xing TEXT, -- 特性\n  xi_you_du TEXT, -- 稀有度\n  miao_shu TEXT, -- 描述\n  jia_zhi TEXT -- 价值\n);"
+      "ddl": "CREATE TABLE sheet_beibao (\n  row_id INTEGER PRIMARY KEY,\n  item_id TEXT,\n  wu_pin_ming_cheng TEXT, -- 物品名称\n  lei_bie TEXT, -- 类别\n  shu_liang TEXT, -- 数量\n  yi_zhuang_bei TEXT, -- 已装备\n  suo_shu_ren TEXT, -- 所属人\n  shang_hai TEXT, -- 伤害\n  te_xing TEXT, -- 特性\n  xi_you_du TEXT, -- 稀有度\n  miao_shu TEXT, -- 描述\n  zhong_liang TEXT, -- 重量\n  jia_zhi TEXT -- 价值\n);"
     },
     "content": [
       [
@@ -175,9 +176,11 @@
         "数量",
         "已装备",
         "所属人",
+        "伤害",
         "特性",
         "稀有度",
         "描述",
+        "重量",
         "价值"
       ]
     ],
@@ -367,12 +370,12 @@
     "uid": "sheet_zhandouzaoyubiao",
     "name": "⚔️ 战斗遭遇表",
     "sourceData": {
-      "note": "-- 【战斗核心表】仅在战斗模式激活，用于回合制战术追踪与前端战术地图UI联动渲染。\nCREATE TABLE sheet_zhandouzaoyubiao (\n    row_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 行号: 自增物理主键\n    dan_wei_ming_cheng TEXT NOT NULL UNIQUE, -- 单位名称: 参战唯一标识,必须与地图表一致(如 '丛林狼A')\n    zhen_ying TEXT NOT NULL CHECK (zhen_ying IN ('友方','敌方','中立')), -- 阵营: UI前端色彩渲染标记\n    xian_gong_wei_zhi TEXT NOT NULL, -- 先攻/位置: 格式'先攻值/相对战术位置'(如 '18/前排近战'/'12/后排30尺')\n    hp_zhuang_tai TEXT NOT NULL, -- HP状态: 格式'当前/最大 [状态标签]'(如 '25/30 [健康]'/'0/18 [濒死†]')\n    fang_yu_kang_xing TEXT NOT NULL, -- 防御/抗性: DND5E基础AC与伤害抗性/免疫(如 'AC16 抗寒'/'AC13 弱火')\n    fu_zhuo_zhuang_tai TEXT NOT NULL DEFAULT '无' -- 附着状态: Buff/Debuff/倒地/受擒/专注,分号分隔(如 '倒地; 祝福术光环')\n);",
+      "note": "-- 【战斗核心表】仅在战斗模式激活，用于回合制战术追踪与前端战术地图UI联动渲染。\nCREATE TABLE sheet_zhandouzaoyubiao (\n    row_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 行号: 自增物理主键\n    dan_wei_ming_cheng TEXT NOT NULL UNIQUE, -- 单位名称: 参战唯一标识,必须与地图表一致(如 '丛林狼A')\n    zhen_ying TEXT NOT NULL CHECK (zhen_ying IN ('友方','敌方','中立')), -- 阵营: UI前端色彩渲染标记\n    xian_gong_wei_zhi TEXT NOT NULL, -- 先攻/位置: 格式'先攻值/相对战术位置'(如 '18/前排近战'/'12/后排30尺')\n    hp_zhuang_tai TEXT NOT NULL, -- HP状态: 格式'当前/最大 [状态标签]'(如 '25/30 [健康]'/'0/18 [濒死†]')\n    fang_yu_kang_xing TEXT NOT NULL, -- 防御/抗性: DND5E基础AC与伤害抗性/免疫(如 'AC16 抗寒'/'AC13 弱火')\n    fu_zhuo_zhuang_tai TEXT NOT NULL DEFAULT '无', -- 附着状态: Buff/Debuff/倒地/受擒/专注,分号分隔(如 '倒地; 祝福术光环')\n    shi_fou_dang_qian_xing_dong_zhe TEXT, -- 是否为当前行动者: [是/否]，高亮当前行动单位\n    hui_he_zi_yuan TEXT -- 回合资源: 如 '动作1/1;附赠0/1;移动30/30尺'\n);",
       "initNode": "/* 【战斗开始触发规则】当触发战斗遭遇时执行：\n 1. 投掷双方先攻值（1d20+敏捷调整值），按先攻由高到低降序依次插入所有参战单位。\n 2. 初始化各单位的生命值、AC防御抗性。\n 3. 同步将全局状态表 sheet_quanjuzhuangtai 的 zhan_dou_mo_shi 改为 '战斗中'。 */\nINSERT INTO sheet_zhandouzaoyubiao (\n    dan_wei_ming_cheng, zhen_ying, xian_gong_wei_zhi,\n    hp_zhuang_tai, fang_yu_kang_xing, fu_zhuo_zhuang_tai\n) VALUES \n(\n    '{主角名}',\n    '友方',\n    '{主角先攻值}/前排近战',\n    '{当前HP/最大HP} [健康]',\n    'AC15',\n    '无'\n),\n(\n    '{敌人A名称: 如 狂暴雪狼}',\n    '敌方',\n    '{敌方先攻值}/近战接触',\n    '{敌方当前HP/最大HP} [完好]',\n    'AC13 抗寒',\n    '无'\n);",
       "updateNode": "/* 【每轮/每动作必更】满足以下任意战斗动作时按 dan_wei_ming_cheng 更新：\n 1. 命中与伤害：结算扣除目标 HP 并刷新状态标签（如 HP归零变为 '0/25 [濒死†]' 或 '[阵亡†]'）。\n 2. 战术位移：移动后更新 xian_gong_wei_zhi 中的相对位置。\n 3. 状态更迭：施加或解除 Buff/Debuff 时刷新 fu_zhuo_zhuang_tai（如倒地、受擒、目盲）。 */\nUPDATE sheet_zhandouzaoyubiao \nSET \n    xian_gong_wei_zhi = '{先攻值}/{最新相对位置或距离}',\n    hp_zhuang_tai = '{更新后HP/最大HP} [{健康 | 轻伤 | 重伤 | 濒死† | 阵亡†}]',\n    fang_yu_kang_xing = '{AC及抗性状态}',\n    fu_zhuo_zhuang_tai = '{最新Buff/Debuff列表，分号分隔，无则填 \"无\"}'\nWHERE dan_wei_ming_cheng = '{受影响的目标单位名称}';",
       "insertNode": "/* 【新增触发规则】当战斗中途有增援入场、召唤物生成或第三方势力介入时执行 */\nINSERT INTO sheet_zhandouzaoyubiao (\n    dan_wei_ming_cheng, zhen_ying, xian_gong_wei_zhi,\n    hp_zhuang_tai, fang_yu_kang_xing, fu_zhuo_zhuang_tai\n) VALUES (\n    '{新参战单位名称: 如 召唤狼灵/敌方援军B}',\n    '{友方 | 敌方 | 中立}',\n    '{入场先攻值}/{入场相对位置: 如 后排60尺}',\n    '{当前HP/最大HP} [健康]',\n    '{AC数值及抗性/弱点}',\n    '{初始自带状态，如: 漂浮/隐形/无}'\n);",
       "deleteNode": "/* 【删除触发规则】\n 1. 战斗结束（敌方全灭/逃跑/战斗胜利）：清空全表数据，并同步将全局状态表的战斗模式置为 '非战斗'。\n 2. 召唤物消散或被击杀且无需保留尸体时，可单独删除该行。 */\nDELETE FROM sheet_zhandouzaoyubiao;",
-      "ddl": "CREATE TABLE sheet_zhandouzaoyubiao (\n  row_id INTEGER PRIMARY KEY,\n  dan_wei_ming_cheng TEXT, -- 单位名称\n  zhen_ying TEXT, -- 阵营\n  xian_gong_wei_zhi TEXT, -- 先攻/位置\n  hp_zhuang_tai TEXT, -- HP状态\n  fang_yu_kang_xing TEXT, -- 防御/抗性\n  fu_zhuo_zhuang_tai TEXT -- 附着状态\n);"
+      "ddl": "CREATE TABLE sheet_zhandouzaoyubiao (\n  row_id INTEGER PRIMARY KEY,\n  dan_wei_ming_cheng TEXT, -- 单位名称\n  zhen_ying TEXT, -- 阵营\n  xian_gong_wei_zhi TEXT, -- 先攻/位置\n  hp_zhuang_tai TEXT, -- HP状态\n  fang_yu_kang_xing TEXT, -- 防御/抗性\n  fu_zhuo_zhuang_tai TEXT, -- 附着状态\n  shi_fou_dang_qian_xing_dong_zhe TEXT, -- 是否为当前行动者\n  hui_he_zi_yuan TEXT -- 回合资源\n);"
     },
     "content": [
       [
@@ -382,7 +385,9 @@
         "先攻/位置",
         "HP状态",
         "防御/抗性",
-        "附着状态"
+        "附着状态",
+        "是否为当前行动者",
+        "回合资源"
       ]
     ],
     "updateConfig": {
@@ -705,12 +710,12 @@
     "uid": "sheet_jinengfashuku",
     "name": "📚 技能/法术库",
     "sourceData": {
-      "note": "-- 【共享技能法术库】存储全量可复用的法术、武技、专长与天赋机制，角色通过关联表 sheet_juesejinengguanlian 引用此库中的技能。\n-- ⚠️ 技能准入铁律：仅收录带明确命名且具独立数值/机制的招式\nCREATE TABLE sheet_jinengfashuku (\n    row_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 行号: 自增物理主键\n    skill_id TEXT NOT NULL UNIQUE, -- 技能编号: 格式'SKILL_XX'(如 'SKILL_01')\n    ji_neng_ming_cheng TEXT NOT NULL, -- 技能名称: 法术/招式/天赋全名(如 '火球术'/'至圣斩'/'捕食者')\n    ji_neng_lei_xing TEXT NOT NULL CHECK (ji_neng_lei_xing IN ('法术','武技','特技','天赋','种族能力','职业能力')), -- 技能类型\n    huan_jie TEXT NOT NULL DEFAULT '-', -- 环阶: 法术环位(0~9环,0=戏法),非法术招式填'-'(如 '3环' / '-')\n    shi_fa_shi_jian TEXT NOT NULL DEFAULT '1动作', -- 施法时间: 动作消耗(如 '1动作'/'1附赠'/'1反应')\n    she_cheng TEXT NOT NULL DEFAULT '自身', -- 射程: 作用距离或范围(如 '自身'/'接触'/'30尺'/'15尺锥状'/'20尺范围，15尺半径的圆')\n    xiao_hao_zi_yuan TEXT NOT NULL DEFAULT '无', -- 消耗资源: 法术位/气点/怒气/次数(如 '3环法术位x1'/'气点x1'/'每日1次')\n    chi_xu_shi_jian TEXT NOT NULL DEFAULT '立即', -- 持续时间: 持续/专注时长(如 '立即'/'专注,至多5回合'/'8小时')\n    xiao_guo_miao_shu TEXT NOT NULL, -- 效果描述: 完整机制条款/豁免DC/伤害骰(禁止概括或简化,优先摘录正文中含自制规则的详细描述，仅在正文缺失细节时调用DND规则库)\n    sheng_jie_xiao_guo TEXT DEFAULT '-' -- 升阶效果: 高环施法追加伤害/目标数(非法术或无升阶填'-')\n);",
+      "note": "-- 【共享技能法术库】存储全量可复用的法术、武技、专长与天赋机制，角色通过关联表 sheet_juesejinengguanlian 引用此库中的技能。\n-- ⚠️ 技能准入铁律：仅收录带明确命名且具独立数值/机制的招式\nCREATE TABLE sheet_jinengfashuku (\n    row_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 行号: 自增物理主键\n    skill_id TEXT NOT NULL UNIQUE, -- 技能编号: 格式'SKILL_XX'(如 'SKILL_01')\n    ji_neng_ming_cheng TEXT NOT NULL, -- 技能名称: 法术/招式/天赋全名(如 '火球术'/'至圣斩'/'捕食者')\n    ji_neng_lei_xing TEXT NOT NULL CHECK (ji_neng_lei_xing IN ('法术','武技','特技','天赋','种族能力','职业能力')), -- 技能类型\n    huan_jie TEXT NOT NULL DEFAULT '-', -- 环阶: 法术环位(0~9环,0=戏法),非法术招式填'-'(如 '3环' / '-')\n    xue_pai TEXT, -- 学派: 法术学派或武技流派\n    shi_fa_shi_jian TEXT NOT NULL DEFAULT '1动作', -- 施法时间: 动作消耗(如 '1动作'/'1附赠'/'1反应')\n    she_cheng TEXT NOT NULL DEFAULT '自身', -- 射程: 作用距离或范围(如 '自身'/'接触'/'30尺'/'15尺锥状'/'20尺范围，15尺半径的圆')\n    xiao_hao_zi_yuan TEXT NOT NULL DEFAULT '无', -- 消耗资源: 法术位/气点/怒气/次数(如 '3环法术位x1'/'气点x1'/'每日1次')\n    cheng_fen TEXT, -- 成分: V/S/M（材料）或能力消耗\n    chi_xu_shi_jian TEXT NOT NULL DEFAULT '立即', -- 持续时间: 持续/专注时长(如 '立即'/'专注,至多5回合'/'8小时')\n    xiao_guo_miao_shu TEXT NOT NULL, -- 效果描述: 完整机制条款/豁免DC/伤害骰(禁止概括或简化,优先摘录正文中含自制规则的详细描述，仅在正文缺失细节时调用DND规则库)\n    sheng_jie_xiao_guo TEXT DEFAULT '-' -- 升阶效果: 高环施法追加伤害/目标数(非法术或无升阶填'-')\n);",
       "initNode": "/* 【初始化触发规则】开局单次执行或由脚本批量注入。按规范插入角色开局自带的核心专属技能/法术模板 */\nINSERT INTO sheet_jinengfashuku (\n    skill_id, ji_neng_ming_cheng, ji_neng_lei_xing, huan_jie,\n    shi_fa_shi_jian, she_cheng, xiao_hao_zi_yuan, chi_xu_shi_jian,\n    xiao_guo_miao_shu, sheng_jie_xiao_guo\n) VALUES (\n    'SKILL_01',\n    '{初始核心法术/招式名: 如 \"火球术\"}',\n    '法术',\n    '3环',\n    '1动作',\n    '40尺',\n    '3环法术位x1',\n    '立即',\n    '指定射程内一点爆发20尺半径火球。区域内生物须进行敏捷豁免，失败受8d6火焰伤害，成功受半。点燃未被着装的可燃物。',\n    '使用4环或更高法术位施展时，每高1环伤害增加1d6。'\n);",
       "updateNode": "/* 严格禁止更新：技能库为底层通用规则定义，条目生成后永久只读。技能等级/进阶通过 insertNode 插入新技能条目，不得直接覆盖原技能定义 */",
       "insertNode": "/* 【新增触发规则】当角色正式领悟/习得全新能力时执行。skill_id 严格按 'SKILL_02', 'SKILL_03' 递增分配。\n \n ⛔ 严禁收录（直接忽略，禁止执行INSERT）：\n  1. 临时肢体行为（如：跳跃、捡石头、翻滚躲闪、攀爬、踢门等普通检定动作）；\n  2. 纯对话/剧情描写（如：威慑某人、施展眼神、日常交流）；\n \n ✅ 准入条件（满足以下之一方可收录）：\n  1. 正文明确提及获得了正式命名的法术/招式（如雷鸣波、闪电箭矢）；\n  2. 具备固定的资源消耗（法术位/职业资源/充能）或明确的伤害骰/豁免DC机制/给敌人debuff/给友方buff。\n  *规则摘录铁律：若正文有自制/魔改数值必须原样摘录，未写明细节时方可调用DND5E标准规则补全。 */\nINSERT INTO sheet_jinengfashuku (\n    skill_id, ji_neng_ming_cheng, ji_neng_lei_xing, huan_jie,\n    shi_fa_shi_jian, she_cheng, xiao_hao_zi_yuan, chi_xu_shi_jian,\n    xiao_guo_miao_shu, sheng_jie_xiao_guo\n) VALUES (\n    '{递增编号: 如 SKILL_02}',\n    '{正式技能/法术全名}',\n    '{法术 | 武技 | 特技 | 天赋 | 种族能力 | 职业能力}',\n    '{环位: 0~9环 或 \"-\"}',\n    '{1动作 | 1附赠 | 1反应 | X分钟}',\n    '{射程: 如 60尺 / 自身 / 接触}',\n    '{消耗: 如 \"1环法术位x1\" / \"每日2次\" / \"战术点\" / \"无\"}',\n    '{持续: 如 \"立即\" / \"专注,1分钟\" / \"8小时\"}',\n    '{完整规则文本与伤害骰/豁免DC判定机制}',\n    '{高环施法效果，无则填 \"-\"}'\n);",
       "deleteNode": "/* 【删除触发规则】仅当确认该技能已被永久废弃、被彻底遗忘，且没有任何角色在【角色技能关联表】中引用此 skill_id 时方可删除 */\nDELETE FROM sheet_jinengfashuku \nWHERE skill_id = '{确认废弃且无关联的技能编号，如 SKILL_19}';",
-      "ddl": "CREATE TABLE sheet_jinengfashuku (\n  row_id INTEGER PRIMARY KEY,\n  skill_id TEXT,\n  ji_neng_ming_cheng TEXT, -- 技能名称\n  ji_neng_lei_xing TEXT, -- 技能类型\n  huan_jie TEXT, -- 环阶\n  shi_fa_shi_jian TEXT, -- 施法时间\n  she_cheng TEXT, -- 射程\n  xiao_hao_zi_yuan TEXT, -- 消耗资源\n  chi_xu_shi_jian TEXT, -- 持续时间\n  xiao_guo_miao_shu TEXT, -- 效果描述\n  sheng_jie_xiao_guo TEXT -- 升阶效果\n);"
+      "ddl": "CREATE TABLE sheet_jinengfashuku (\n  row_id INTEGER PRIMARY KEY,\n  skill_id TEXT,\n  ji_neng_ming_cheng TEXT, -- 技能名称\n  ji_neng_lei_xing TEXT, -- 技能类型\n  huan_jie TEXT, -- 环阶\n  xue_pai TEXT, -- 学派\n  shi_fa_shi_jian TEXT, -- 施法时间\n  she_cheng TEXT, -- 射程\n  xiao_hao_zi_yuan TEXT, -- 消耗资源\n  cheng_fen TEXT, -- 成分\n  chi_xu_shi_jian TEXT, -- 持续时间\n  xiao_guo_miao_shu TEXT, -- 效果描述\n  sheng_jie_xiao_guo TEXT -- 升阶效果\n);"
     },
     "content": [
       [
@@ -719,9 +724,11 @@
         "技能名称",
         "技能类型",
         "环阶",
+        "学派",
         "施法时间",
         "射程",
         "消耗资源",
+        "成分",
         "持续时间",
         "效果描述",
         "升阶效果"
@@ -774,12 +781,12 @@
     "uid": "sheet_juesejinengguanlian",
     "name": "🔗 角色技能关联",
     "sourceData": {
-      "note": "-- 【角色技能关联表】建立角色与技能库的多对多映射，追踪各角色的法术准备状态与施法属性。\nCREATE TABLE sheet_juesejinengguanlian (\n    row_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 行号: 自增物理主键\n    skill_link_id TEXT NOT NULL UNIQUE, -- 关联编号: 业务唯一键,格式'SLINK_XX'(如 'SLINK_13')\n    char_id TEXT NOT NULL, -- 角色编号: 主角固定为'PC_MAIN',同伴为'ALLY_XX'(如 'PC_MAIN'/'ALLY_02')\n    skill_id TEXT NOT NULL, -- 技能编号: 关联技能库的 skill_id(如 'SKILL_04')\n    yi_zhun_bei TEXT NOT NULL DEFAULT '是' CHECK (yi_zhun_bei IN ('是','否')), -- 已准备: 法术准备状态(戏法/武技/被动恒为'是')\n    bei_zhu TEXT -- 备注: 限制条件/施法属性/获取来源(如 '智力施法,DC 14'/'法术学院学习获取')\n);",
+      "note": "-- 【角色技能关联表】建立角色与技能库的多对多映射，追踪各角色的法术准备状态与施法属性。\nCREATE TABLE sheet_juesejinengguanlian (\n    row_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 行号: 自增物理主键\n    skill_link_id TEXT NOT NULL UNIQUE, -- 关联编号: 业务唯一键,格式'SLINK_XX'(如 'SLINK_13')\n    char_id TEXT NOT NULL, -- 角色编号: 主角固定为'PC_MAIN',同伴为'ALLY_XX'(如 'PC_MAIN'/'ALLY_02')\n    skill_id TEXT NOT NULL, -- 技能编号: 关联技能库的 skill_id(如 'SKILL_04')\n    huo_qu_fang_shi TEXT, -- 获取方式: 职业/种族/专长/道具/卷轴\n    yi_zhun_bei TEXT NOT NULL DEFAULT '是' CHECK (yi_zhun_bei IN ('是','否')), -- 已准备: 法术准备状态(戏法/武技/被动恒为'是')\n    shu_lian_du TEXT, -- 熟练度: [生疏/熟练/精通]\n    bei_zhu TEXT -- 备注: 限制条件/施法属性/获取来源(如 '智力施法,DC 14'/'法术学院学习获取')\n);",
       "initNode": "/* 【初始化触发规则】开局单次执行或由角色创建脚本注入。为主角(PC_MAIN)及初始同伴绑定其开局已掌握的初始技能条目 */\nINSERT INTO sheet_juesejinengguanlian (\n    skill_link_id, char_id, skill_id, yi_zhun_bei, bei_zhu\n) VALUES \n(\n    'SLINK_01',\n    'PC_MAIN',\n    'SKILL_01',\n    '是',\n    '{初始能力来源，如: 职业初始掌握 / 原生天赋}'\n),\n(\n    'SLINK_02',\n    '{初始同伴ID: 如 ALLY_01}',\n    'SKILL_01',\n    '是',\n    '{同伴能力来源备注}'\n);",
       "updateNode": "/* 【更新触发规则】满足以下任意条件时按 skill_link_id 或 (char_id + skill_id) 精确更新：\n 1. 法术准备更迭：施法职业（法师/牧师/德鲁伊/圣武士等）在完成【长休】后更换准备法术时，切换 yi_zhun_bei 为 '是' 或 '否'。\n 2. 熟练度与DC提升：角色属性提升导致法术豁免 DC、攻击命中加值或使用限制变化时，刷新 bei_zhu。 */\nUPDATE sheet_juesejinengguanlian \nSET \n    yi_zhun_bei = '{是 | 否}',\n    bei_zhu = '{最新施法DC/加值/限制说明}'\nWHERE skill_link_id = '{目标关联编号，如 SLINK_01}'\n   OR (char_id = '{角色ID}' AND skill_id = '{技能ID}');",
       "insertNode": "/* 【新增触发规则】当角色通过研习书卷、顿悟、或拜师学习、转化习得全新能力时，在技能库录入后，必须在此表建立绑定关系。skill_link_id 严格按 'SLINK_03', 'SLINK_04' 递增 */\nINSERT INTO sheet_juesejinengguanlian (\n    skill_link_id, char_id, skill_id, yi_zhun_bei, bei_zhu\n) VALUES (\n    '{递增关联编号: 如 SLINK_03}',\n    '{学习者角色ID: PC_MAIN 或 ALLY_XX}',\n    '{关联的技能编号: 如 SKILL_02}',\n    '{法术类根据是否准备填 是/否，武技/特技固定为 是}',\n    '{学习来源、施法关键属性、DC检定加值或限制条件}'\n);",
       "deleteNode": "/* 【删除触发规则】仅当角色因诅咒、契约破裂、遗忘法术或永久丧失该项能力时，解除对应映射关系（极为少见） */\nDELETE FROM sheet_juesejinengguanlian \nWHERE skill_link_id = '{解绑的关联编号，如 SLINK_06}'\n   OR (char_id = '{角色ID}' AND skill_id = '{废弃的技能ID}');",
-      "ddl": "CREATE TABLE sheet_juesejinengguanlian (\n  row_id INTEGER PRIMARY KEY,\n  skill_link_id TEXT,\n  char_id TEXT,\n  skill_id TEXT,\n  yi_zhun_bei TEXT, -- 已准备\n  bei_zhu TEXT -- 备注\n);"
+      "ddl": "CREATE TABLE sheet_juesejinengguanlian (\n  row_id INTEGER PRIMARY KEY,\n  skill_link_id TEXT,\n  char_id TEXT,\n  skill_id TEXT,\n  huo_qu_fang_shi TEXT, -- 获取方式\n  yi_zhun_bei TEXT, -- 已准备\n  shu_lian_du TEXT, -- 熟练度\n  bei_zhu TEXT -- 备注\n);"
     },
     "content": [
       [
@@ -787,7 +794,9 @@
         "skill_link_id",
         "char_id",
         "skill_id",
+        "获取方式",
         "已准备",
+        "熟练度",
         "备注"
       ]
     ],
@@ -838,20 +847,23 @@
     "uid": "sheet_zhuanchangku",
     "name": "🏅 专长库",
     "sourceData": {
-      "note": "-- 【共享专长库】存储全量可复用的专长、被动、天赋与特质规则。\nCREATE TABLE sheet_zhuanchangku (\n    row_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 行号: 自增物理主键\n    feat_id TEXT NOT NULL UNIQUE, -- 专长编号: 业务唯一键,格式'FEAT_XX'(如 'FEAT_09')\n    zhuan_chang_ming_cheng TEXT NOT NULL, -- 专长名称: 专长/天赋全名(如 '警觉'/'爪刃大师'/'战地施法者')\n    xiao_guo_miao_shu TEXT NOT NULL, -- 效果描述: 完整机制条款/豁免优势/被动特性(严禁概括,须摘录完整规则)\n    shu_xing_ti_sheng TEXT NOT NULL DEFAULT '无' -- 属性提升: 半专长属性加成(如 '敏捷+1'/'体质+1'/'无')\n);",
+      "note": "-- 【共享专长库】存储全量可复用的专长、被动、天赋与特质规则。\nCREATE TABLE sheet_zhuanchangku (\n    row_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 行号: 自增物理主键\n    feat_id TEXT NOT NULL UNIQUE, -- 专长编号: 业务唯一键,格式'FEAT_XX'(如 'FEAT_09')\n    zhuan_chang_ming_cheng TEXT NOT NULL, -- 专长名称: 专长/天赋全名(如 '警觉'/'爪刃大师'/'战地施法者')\n    lei_bie TEXT, -- 类别: [通用/战斗/法术/技巧/种族]\n    qian_zhi_tiao_jian TEXT, -- 前置条件: 获取前置要求（如 '力量13+'、'施法能力'）\n    xiao_guo_miao_shu TEXT NOT NULL, -- 效果描述: 完整机制条款/豁免优势/被动特性(严禁概括,须摘录完整规则)\n    shu_xing_ti_sheng TEXT NOT NULL DEFAULT '无', -- 属性提升: 半专长属性加成(如 '敏捷+1'/'体质+1'/'无')\n    fu_dai_neng_li_id TEXT -- 附带能力ID: 专长附带的技能ID列表（关联技能库）\n);",
       "initNode": "/* 【初始化触发规则】开局单次执行或由角色创建脚本注入。按规范插入开局角色/种族自带的核心初始专长模板 */\nINSERT INTO sheet_zhuanchangku (\n    feat_id, zhuan_chang_ming_cheng, xiao_guo_miao_shu, shu_xing_ti_sheng\n) VALUES (\n    'FEAT_01',\n    '{初始专长/特质名称: 如 \"警觉\"}',\n    '{完整效果规则: 如 \"先攻检定获得+5加值; 只要处于清醒状态便不会被突袭; 隐形敌人对你的攻击不具有优势\"}',\n    '无'\n);",
       "updateNode": "/* 严格禁止更新：专长库为底层规则底册，条目写入后永久只读。若专长进阶/蜕变请使用 insertNode 录入新专长条目 */",
       "insertNode": "/* 【新增触发规则】当角色剧情觉醒天赋、特殊特质、或修炼、学习、感悟获取专长时执行。feat_id 严格按 'FEAT_02', 'FEAT_03' 递增分配。\n \n ⛔ 严禁收录：临时状态（Buff/Debuff）、普通装备词条、日常肢体行为。\n ✅ 准入条件：必须是或具有长期生效被动机制的独立天赋/被动能力。 */\nINSERT INTO sheet_zhuanchangku (\n    feat_id, zhuan_chang_ming_cheng, xiao_guo_miao_shu, shu_xing_ti_sheng\n) VALUES (\n    '{递增编号: 如 FEAT_02}',\n    '{专长/天赋全名}',\n    '{详细机制规则条款、豁免优势及被动加成}',\n    '{属性提升数值: 如 \"体质+1\" / \"力量+1\" / \"无\"}'\n);",
       "deleteNode": "/* 【删除触发规则】仅当确认该专长已被彻底废弃、遗忘，且没有任何角色在角色专长关联（sheet_juesezhuanchangguanlian）中引用此 feat_id 时方可删除 */\nDELETE FROM sheet_zhuanchangku \nWHERE feat_id = '{确认废弃且无关联的专长编号，如 FEAT_49}';",
-      "ddl": "CREATE TABLE sheet_zhuanchangku (\n  row_id INTEGER PRIMARY KEY,\n  feat_id TEXT,\n  zhuan_chang_ming_cheng TEXT, -- 专长名称\n  xiao_guo_miao_shu TEXT, -- 效果描述\n  shu_xing_ti_sheng TEXT -- 属性提升\n);"
+      "ddl": "CREATE TABLE sheet_zhuanchangku (\n  row_id INTEGER PRIMARY KEY,\n  feat_id TEXT,\n  zhuan_chang_ming_cheng TEXT, -- 专长名称\n  lei_bie TEXT, -- 类别\n  qian_zhi_tiao_jian TEXT, -- 前置条件\n  xiao_guo_miao_shu TEXT, -- 效果描述\n  shu_xing_ti_sheng TEXT, -- 属性提升\n  fu_dai_neng_li_id TEXT -- 附带能力ID\n);"
     },
     "content": [
       [
         "row_id",
         "feat_id",
         "专长名称",
+        "类别",
+        "前置条件",
         "效果描述",
-        "属性提升"
+        "属性提升",
+        "附带能力ID"
       ]
     ],
     "updateConfig": {
@@ -901,12 +913,12 @@
     "uid": "sheet_juesezhuanchangguanlian",
     "name": "🔗 角色专长关联",
     "sourceData": {
-      "note": "-- 【角色专长关联表】建立角色与专长库的多对多映射，追踪专长获取等级与分支定制选项。\nCREATE TABLE sheet_juesezhuanchangguanlian (\n    row_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 行号: 自增物理主键\n    feat_link_id TEXT NOT NULL UNIQUE, -- 关联编号: 业务唯一键,格式'FLINK_XX'(如 'FLINK_01')\n    char_id TEXT NOT NULL, -- 角色编号: 主角固定为'PC_MAIN',同伴为'ALLY_XX'(如 'PC_MAIN'/'ALLY_02')\n    feat_id TEXT NOT NULL, -- 专长编号: 关联专长库的 feat_id(如 'FEAT_01')\n    huo_qu_deng_ji TEXT NOT NULL, -- 获取等级: 习得时的角色等级或途径(如 '1级'/'4级'/'种族自带')\n    yi_xuan_ze_xiang TEXT NOT NULL DEFAULT '无', -- 已选择项: 专长分支定制项(如 '体质豁免'/'火焰抗性'/'无')\n    bei_zhu TEXT -- 备注: 触发时机/来源背景/附加说明(如 '向XX学习获得'/'在XX修炼获得'/'无')\n);",
+      "note": "-- 【角色专长关联表】建立角色与专长库的多对多映射，追踪专长获取等级与分支定制选项。\nCREATE TABLE sheet_juesezhuanchangguanlian (\n    row_id INTEGER PRIMARY KEY AUTOINCREMENT, -- 行号: 自增物理主键\n    feat_link_id TEXT NOT NULL UNIQUE, -- 关联编号: 业务唯一键,格式'FLINK_XX'(如 'FLINK_01')\n    char_id TEXT NOT NULL, -- 角色编号: 主角固定为'PC_MAIN',同伴为'ALLY_XX'(如 'PC_MAIN'/'ALLY_02')\n    feat_id TEXT NOT NULL, -- 专长编号: 关联专长库的 feat_id(如 'FEAT_01')\n    huo_qu_lai_yuan TEXT, -- 获取来源: 等级/种族/职业/奖励/背景\n    huo_qu_deng_ji TEXT NOT NULL, -- 获取等级: 习得时的角色等级或途径(如 '1级'/'4级'/'种族自带')\n    yi_xuan_ze_xiang TEXT NOT NULL DEFAULT '无', -- 已选择项: 专长分支定制项(如 '体质豁免'/'火焰抗性'/'无')\n    bei_zhu TEXT -- 备注: 触发时机/来源背景/附加说明(如 '向XX学习获得'/'在XX修炼获得'/'无')\n);",
       "initNode": "/* 【初始化触发规则】开局单次执行或由角色创建脚本注入。为主角(PC_MAIN)及初始同伴绑定开局已拥有的专长与被动特质 */\nINSERT INTO sheet_juesezhuanchangguanlian (\n    feat_link_id, char_id, feat_id, huo_qu_deng_ji,\n    yi_xuan_ze_xiang, bei_zhu\n) VALUES (\n    'FLINK_01',\n    'PC_MAIN',\n    'FEAT_01',\n    '1级',\n    '无',\n    '{初始专长获取背景，如: 种族特性 / 初始核心天赋}'\n);",
       "updateNode": "/* 【更新触发规则】仅当专长附带的分支选项（如属性点重新分配、语言变更）或备注说明发生变化时按 feat_link_id 更新 */\nUPDATE sheet_juesezhuanchangguanlian \nSET \n    yi_xuan_ze_xiang = '{最新分支选项}',\n    bei_zhu = '{最新机制备注}'\nWHERE feat_link_id = '{目标关联编号，如 FLINK_01}';",
       "insertNode": "/* 【新增触发规则】当角色剧情觉醒天赋、特殊特质、或修炼、学习、感悟获取专长时执行。feat_link_id 严格按 'FLINK_02', 'FLINK_03' 递增 */\nINSERT INTO sheet_juesezhuanchangguanlian (\n    feat_link_id, char_id, feat_id, huo_qu_deng_ji,\n    yi_xuan_ze_xiang, bei_zhu\n) VALUES (\n    '{递增编号: 如 FLINK_02}',\n    '{获得专长的角色ID: PC_MAIN 或 ALLY_XX}',\n    '{关联的专长编号: 如 FEAT_02}',\n    '{当前角色等级或获取节点: 如 \"4级\"}',\n    '{专长分支选择项: 如 \"火焰流派法术增强\" / \"龙语\" / \"无\"}',\n    '{获取途径与机制备注}'\n);",
       "deleteNode": "/* 严格禁止删除：已获得的专长与天赋属于永久角色资产，通常不可剥离。*/",
-      "ddl": "CREATE TABLE sheet_juesezhuanchangguanlian (\n  row_id INTEGER PRIMARY KEY,\n  feat_link_id TEXT,\n  char_id TEXT,\n  feat_id TEXT,\n  huo_qu_deng_ji TEXT, -- 获取等级\n  yi_xuan_ze_xiang TEXT, -- 已选择项\n  bei_zhu TEXT -- 备注\n);"
+      "ddl": "CREATE TABLE sheet_juesezhuanchangguanlian (\n  row_id INTEGER PRIMARY KEY,\n  feat_link_id TEXT,\n  char_id TEXT,\n  feat_id TEXT,\n  huo_qu_lai_yuan TEXT, -- 获取来源\n  huo_qu_deng_ji TEXT, -- 获取等级\n  yi_xuan_ze_xiang TEXT, -- 已选择项\n  bei_zhu TEXT -- 备注\n);"
     },
     "content": [
       [
@@ -914,6 +926,7 @@
         "feat_link_id",
         "char_id",
         "feat_id",
+        "获取来源",
         "获取等级",
         "已选择项",
         "备注"
